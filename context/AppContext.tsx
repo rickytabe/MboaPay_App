@@ -585,12 +585,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const requestPasswordReset = async (email: string) => {
     ensureSupabaseConfigured();
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: false,
-      },
-    });
+    const { error } = await supabase.auth.resetPasswordForEmail(email);
     if (error) throw new Error(error.message);
   };
 

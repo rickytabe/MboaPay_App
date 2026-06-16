@@ -1,7 +1,7 @@
-import * as Contacts from 'expo-contacts';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Alert, Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View, TouchableOpacity, Modal, FlatList } from "react-native";
+import * as Contacts from 'expo-contacts';
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import TopNavBarComponent from "../components/TopNavBarComponent";

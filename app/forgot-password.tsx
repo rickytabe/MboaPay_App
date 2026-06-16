@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   headerSpacer: { width: 44 },
   content: { flex: 1 },
   title: {
-    ...TYPOGRAPHY.h1,
+    ...TYPOGRAPHY.bodyLg,
     marginBottom: 8,
   },
   subtitle: {
@@ -133,7 +133,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   label: {
-    ...TYPOGRAPHY.bodySm,
+    ...TYPOGRAPHY.bodyMd,
     fontWeight: "600",
     color: COLORS.primary,
   },

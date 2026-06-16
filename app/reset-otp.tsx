@@ -1,18 +1,18 @@
-import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
-    Animated,
-    Keyboard,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  Animated,
+  Keyboard,
 } from "react-native";
-import { Button } from "../components/Button";
-import { COLORS, SPACING } from "../constants/Theme";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useApp } from "../context/AppContext";
+import { COLORS, SPACING } from "../constants/Theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Button } from "../components/Button";
 import { useToast } from "../context/ToastContext";
 
 const OTP_LENGTH = 6;
