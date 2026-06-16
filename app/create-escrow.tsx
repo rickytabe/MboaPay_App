@@ -1,8 +1,9 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Keyboard } from "react-native";
+import React, { useState, useEffect } from "react";
+import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Keyboard, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
 import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import Button from "../components/Button";
@@ -15,8 +16,55 @@ export default function CreateEscrow() {
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
-  const [counterparty, setCounterparty] = useState("");
+  const [counterpartyPhone, setCounterpartyPhone] = useState("");
+  const [counterpartyName, setCounterpartyName] = useState("");
+  const [isValidatingPhone, setIsValidatingPhone] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchCounterparty = async () => {
+      const cleanPhone = counterpartyPhone.replace(/[^0-9]/g, "");
+      let formattedPhone = "";
+      
+      if (cleanPhone.length >= 9) {
+        const basePhone = cleanPhone.length === 12 && cleanPhone.startsWith("237") 
+          ? cleanPhone.slice(3) 
+          : cleanPhone.slice(-9);
+        formattedPhone = `+237${basePhone}`;
+      }
+
+      if (formattedPhone) {
+        setIsValidatingPhone(true);
+        setPhoneError("");
+        setCounterpartyName("");
+        
+        try {
+          const { data, error } = await supabase
+            .from("users")
+            .select("full_name")
+            .eq("phone", formattedPhone)
+            .maybeSingle();
+
+          if (error || !data) {
+            setPhoneError("User not found on MboaPay.");
+          } else {
+            setCounterpartyName(data.full_name);
+          }
+        } catch (err) {
+          setPhoneError("Error checking user.");
+        } finally {
+          setIsValidatingPhone(false);
+        }
+      } else {
+        setCounterpartyName("");
+        setPhoneError("");
+      }
+    };
+
+    const timeoutId = setTimeout(fetchCounterparty, 500);
+    return () => clearTimeout(timeoutId);
+  }, [counterpartyPhone]);
 
   const handleCreate = async () => {
     Keyboard.dismiss();
@@ -33,21 +81,18 @@ export default function CreateEscrow() {
       Alert.alert("Error", "Please enter a valid protection amount");
       return;
     }
-    if (!counterparty.trim()) {
-      Alert.alert("Error", "Please enter the counterparty details");
+    if (!counterpartyPhone.trim() || !counterpartyName) {
+      Alert.alert("Error", "Please enter a valid MboaPay counterparty phone number");
       return;
     }
 
     setLoading(true);
     try {
-      const buyerName = role === "buyer" ? "You" : counterparty.trim();
-      const sellerName = role === "seller" ? "You" : counterparty.trim();
-
       await createEscrowContract(
         title.trim(),
         description.trim(),
         amountNum,
-        counterparty.trim(),
+        counterpartyPhone.trim(),
         role
       );
 
@@ -56,9 +101,9 @@ export default function CreateEscrow() {
         `Protection agreement "${title.trim()}" has been created.`,
         [{ text: "OK", onPress: () => router.replace("/(tabs)/escrow") }]
       );
-    } catch (e) {
+    } catch (e: any) {
       console.log(e);
-      Alert.alert("Error", "Failed to create escrow agreement.");
+      Alert.alert("Error", e.message || "Failed to create escrow agreement.");
     } finally {
       setLoading(false);
     }
@@ -118,15 +163,25 @@ export default function CreateEscrow() {
             {/* Counterparty */}
             <View style={styles.inputGroup}>
               <Text style={styles.label}>
-                {role === "buyer" ? "Seller Name / Phone" : "Buyer Name / Phone"}
+                {role === "buyer" ? "Seller's Phone Number" : "Buyer's Phone Number"}
               </Text>
               <TextInput
                 style={styles.input}
-                placeholder={role === "buyer" ? "e.g. Frank (Seller)" : "e.g. Alice (Buyer)"}
+                placeholder="e.g. 670000000"
                 placeholderTextColor={COLORS.outline}
-                value={counterparty}
-                onChangeText={setCounterparty}
+                keyboardType="phone-pad"
+                value={counterpartyPhone}
+                onChangeText={setCounterpartyPhone}
               />
+              {isValidatingPhone && (
+                <Text style={styles.validationText}>Finding user...</Text>
+              )}
+              {!isValidatingPhone && counterpartyName ? (
+                <Text style={styles.successText}>Found: {counterpartyName}</Text>
+              ) : null}
+              {!isValidatingPhone && phoneError ? (
+                <Text style={styles.errorText}>{phoneError}</Text>
+              ) : null}
             </View>
 
             {/* Amount */}
@@ -162,7 +217,7 @@ export default function CreateEscrow() {
           <Button
             title="Create Escrow Protection"
             onPress={handleCreate}
-            disabled={!title.trim() || !description.trim() || !amount || !counterparty.trim() || loading}
+            disabled={!title.trim() || !description.trim() || !amount || !counterpartyPhone.trim() || !counterpartyName || loading}
             loading={loading}
             type="primary"
           />
@@ -247,5 +302,21 @@ const styles = StyleSheet.create({
   },
   bottomSection: {
     marginTop: 20,
+  },
+  validationText: {
+    fontSize: 12,
+    color: COLORS.outline,
+    marginTop: 4,
+  },
+  successText: {
+    fontSize: 12,
+    color: COLORS.primary || "#4CAF50",
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  errorText: {
+    fontSize: 12,
+    color: COLORS.error || "#F44336",
+    marginTop: 4,
   },
 });

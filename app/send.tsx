@@ -1,7 +1,7 @@
 import * as Contacts from 'expo-contacts';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, ScrollView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import Card from "../components/Card";
@@ -167,8 +167,7 @@ export default function Send() {
         style={{ flex: 1 }} 
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={{ flex: 1, justifyContent: "space-between" }}>
+          <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "space-between" }} keyboardShouldPersistTaps="handled">
             
             <View style={styles.header}>
               <TopNavBarComponent showBack title="Send Money" />
@@ -258,8 +257,7 @@ export default function Send() {
               />
             </View>
 
-          </View>
-        </TouchableWithoutFeedback>
+          </ScrollView>
       </KeyboardAvoidingView>
 
       {/* Contacts Modal */}

@@ -25,7 +25,7 @@ export async function initiatePayout({
       recipient: {
         type: "MMO",
         accountDetails: {
-          phoneNumber,
+          phoneNumber: phoneNumber.replace(/[^0-9]/g, ""),
           provider,
         },
       },

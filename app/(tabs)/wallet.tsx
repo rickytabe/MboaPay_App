@@ -120,9 +120,15 @@ export default function Wallet() {
       {/* Wallet Actions */}
       <View style={styles.actionButtonsRow}>
         <Button
-          title="Top-up Wallet"
+          title="Top-up"
           onPress={() => router.push("/topup")}
           type="primary"
+          style={{ flex: 1 }}
+        />
+        <Button
+          title="Withdraw"
+          onPress={() => router.push("/withdraw")}
+          type="outlined"
           style={{ flex: 1 }}
         />
       </View>

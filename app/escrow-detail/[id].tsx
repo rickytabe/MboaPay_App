@@ -11,7 +11,7 @@ import Button from "../../components/Button";
 export default function EscrowDetail() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { escrows, releaseEscrowContract, disputeEscrowContract } = useApp();
+  const { escrows, lockEscrowFunds, releaseEscrowContract, disputeEscrowContract } = useApp();
   const [loading, setLoading] = useState(false);
 
   const escrowId = params.id as string;
@@ -27,8 +27,15 @@ export default function EscrowDetail() {
   }
 
   const handleLockFunds = async () => {
-    // This is handled during creation, keeping dummy for now
-    Alert.alert("Success", "Funds locked successfully inside protection escrow.");
+    setLoading(true);
+    try {
+      await lockEscrowFunds(escrowId);
+      Alert.alert("Success", "Funds locked successfully inside protection escrow.");
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to lock funds. Please check your balance and try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRelease = async () => {

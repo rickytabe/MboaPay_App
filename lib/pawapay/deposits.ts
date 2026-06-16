@@ -25,7 +25,7 @@ export async function initiateDeposit({
       payer: {
         type: "MMO",
         accountDetails: {
-          phoneNumber,
+          phoneNumber: phoneNumber.replace(/[^0-9]/g, ""),
           provider,
         },
       },
