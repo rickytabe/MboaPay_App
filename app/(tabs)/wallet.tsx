@@ -49,7 +49,7 @@ export default function Wallet() {
     
     return (
       <View key={item.id}>
-        <View style={styles.txRow}>
+        <TouchableOpacity style={styles.txRow} onPress={() => router.push(`/transaction-detail/${item.id}` as any)}>
           <View style={[styles.txIconContainer, { backgroundColor: icon.color + "15" }]}>
             <Ionicons name={icon.name} size={18} color={icon.color} />
           </View>
@@ -68,7 +68,7 @@ export default function Wallet() {
             </Text>
             <Text style={styles.txDate}>{item.date}</Text>
           </View>
-        </View>
+        </TouchableOpacity>
         {idx < filteredTransactions.length - 1 && <View style={styles.divider} />}
       </View>
     );
@@ -120,9 +120,15 @@ export default function Wallet() {
       {/* Wallet Actions */}
       <View style={styles.actionButtonsRow}>
         <Button
-          title="Top-up Wallet"
+          title="Top-up"
           onPress={() => router.push("/topup")}
           type="primary"
+          style={{ flex: 1 }}
+        />
+        <Button
+          title="Withdraw"
+          onPress={() => router.push("/withdraw")}
+          type="outlined"
           style={{ flex: 1 }}
         />
       </View>
