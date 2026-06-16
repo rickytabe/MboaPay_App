@@ -9,7 +9,12 @@ import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
 import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 
-const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+const generateId = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 

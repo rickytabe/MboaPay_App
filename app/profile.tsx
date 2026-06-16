@@ -19,7 +19,7 @@ export default function Profile() {
     try {
       await logout();
       toast.success("Logged out", "Your session has been closed.");
-      router.replace("/");
+      router.replace("/login");
     } catch (err) {
       const message = getErrorMessage(err, "Could not log out. Please try again.");
       toast.error("Log out failed", message);
