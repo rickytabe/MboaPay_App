@@ -79,10 +79,11 @@ export interface AppContextType {
   notifications: AppNotification[];
   pendingEmail: string;
   login: (phone: string) => Promise<void>;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<{ needsProfileSetup: boolean }>;
   registerWithEmail: (email: string, pass: string, fullName: string, phone: string, mnoProvider?: string) => Promise<{ pendingEmail: string }>;
-  verifyOtp: (email: string, token: string) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<{ needsProfileSetup: boolean }>;
   updateProfile: (name: string, email: string, avatarUrl?: string, phone?: string) => Promise<void>;
+  updateAvatar: (avatarUrl: string) => Promise<void>;
   setOperator: (op: "MTN" | "Orange") => void;
   topUpWallet: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
   sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;

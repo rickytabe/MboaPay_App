@@ -22,6 +22,25 @@ const INITIAL_USER: UserProfile = {
   isLoggedIn: false,
 };
 
+const getAvatarStorageKey = (userId: string) => `mboa_avatar_${userId}`;
+
+const loadStoredAvatar = async (userId: string): Promise<string | null> => {
+  try {
+    return await AsyncStorage.getItem(getAvatarStorageKey(userId));
+  } catch (e) {
+    console.warn("Error loading stored avatar", e);
+    return null;
+  }
+};
+
+const persistAvatar = async (userId: string, avatarUrl: string) => {
+  try {
+    await AsyncStorage.setItem(getAvatarStorageKey(userId), avatarUrl);
+  } catch (e) {
+    console.warn("Error saving avatar", e);
+  }
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [authSession, setAuthSession] = useState<Session | null>(null);
@@ -40,7 +59,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const syncProfileFromSession = useCallback(async (session: Session | null) => {
-    return await syncProfileFromSessionHelper(session, setAuthSession, setUser, fetchAppData, INITIAL_USER);
+    const isComplete = await syncProfileFromSessionHelper(session, setAuthSession, setUser, fetchAppData, INITIAL_USER);
+    if (session?.user?.id) {
+      const storedAvatarUrl = await loadStoredAvatar(session.user.id);
+      if (storedAvatarUrl) {
+        setUser((prev) => ({ ...prev, avatarUrl: storedAvatarUrl }));
+      }
+    }
+    return isComplete;
   }, [fetchAppData]);
 
   const refreshData = async () => {
@@ -189,6 +215,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (profileError) throw new Error(profileError.message);
     if (!updatedProfile) throw new Error("Profile row not found. Run auth_trigger.sql in Supabase, then try again.");
 
+    if (avatarUrl) {
+      await persistAvatar(currentSession.user.id, avatarUrl);
+    }
+
     const { error: metadataError } = await supabase.auth.updateUser({
       data: { full_name: trimmedName, email: trimmedEmail || null, avatar_url: avatarUrl || null, phone: phone || null },
     });
@@ -200,6 +230,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       phone: phone || prev.phone, avatarUrl: avatarUrl || prev.avatarUrl, isLoggedIn: true,
     }));
     await fetchAppData(currentSession.user.id);
+  };
+
+  const updateAvatar = async (avatarUrl: string) => {
+    if (!user.id) throw new Error("You must be signed in to update your avatar.");
+    await persistAvatar(user.id, avatarUrl);
+    setUser((prev) => ({ ...prev, avatarUrl }));
   };
 
   const setOperator = (op: 'MTN' | 'Orange') => {
@@ -492,6 +528,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerWithEmail,
         verifyOtp,
         updateProfile,
+        updateAvatar,
         setOperator,
         topUpWallet,
         createCircle,
