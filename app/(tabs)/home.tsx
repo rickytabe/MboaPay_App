@@ -2,6 +2,7 @@
 import { useRouter } from "expo-router";
 import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
 import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
@@ -153,7 +154,8 @@ export default function Home() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <TopNavBarComponent />
+      <SafeAreaView>
+      <TopNavBarComponent tabName="Home"/>
 
       {/* Greeting Banner */}
       <View style={styles.welcomeSection}>
@@ -279,6 +281,7 @@ export default function Home() {
           </View>
         )}
       </Card>
+      </SafeAreaView>
     </ScrollView>
   );
 }

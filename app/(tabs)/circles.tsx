@@ -108,7 +108,7 @@ export default function Circles() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
         <SafeAreaView>
-      <TopNavBarComponent title="Savings Circles" />
+      <TopNavBarComponent title="Savings Circles"  tabName="Circles"/>
 
       {/* Intro Cards */}
       <View style={styles.actionHeaderCards}>

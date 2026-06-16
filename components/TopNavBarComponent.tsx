@@ -1,18 +1,20 @@
-import React from "react";
-import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useApp } from "../context/AppContext";
+import React from "react";
+import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { COLORS, TYPOGRAPHY } from "../constants/Theme";
+import { useApp } from "../context/AppContext";
 
 interface TopNavProps {
   title?: string;
   showBack?: boolean;
   showNotifications?: boolean;
+  tabName?: string
 }
 
 export const TopNavBarComponent = ({
   title = "MboaPay",
+  tabName,
   showBack = false,
   showNotifications = true,
 }: TopNavProps) => {
@@ -44,7 +46,8 @@ export const TopNavBarComponent = ({
         )}
 
         <Text style={styles.headerTitle} numberOfLines={1}>
-          {showBack ? title : (user.name ? `Hello, ${user.name.split(" ")[0]}` : title)}
+          {/* {showBack ? title : (user.name ? `Hello, ${user.name.split(" ")[0]}` : title)} */}
+          {tabName}
         </Text>
       </View>
 

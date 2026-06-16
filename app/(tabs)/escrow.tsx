@@ -85,7 +85,7 @@ export default function EscrowHome() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <SafeAreaView>
-      <TopNavBarComponent title="Escrow Protection" />
+      <TopNavBarComponent title="Escrow Protection" tabName="Escrow"/>
 
       {/* Overview Stats Cards */}
       <View style={styles.statsContainer}>

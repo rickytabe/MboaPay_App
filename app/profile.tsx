@@ -75,7 +75,7 @@ export default function Profile() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <SafeAreaView>
-      <TopNavBarComponent title="My Profile" />
+      <TopNavBarComponent title="My Profile" tabName="Profile"/>
 
       {/* Profile Header Hero */}
       <View style={styles.heroSection}>
