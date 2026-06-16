@@ -1,14 +1,23 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
-import * as Notifications from "expo-notifications";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
 import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
 import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
 import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
+import { registerPushNotifications, savePushToken, notifyAdminOfPendingMember, notifyUserOfApproval } from "../lib/notificationService";
 import { loadAppData, subscribeToAppData, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
 import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
+
+const loadNotificationsModule = async () => {
+  try {
+    return await import("expo-notifications");
+  } catch (error) {
+    console.warn("Could not load expo-notifications:", error);
+    return null;
+  }
+};
 
 const generateId = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -47,15 +56,19 @@ const persistAvatar = async (userId: string, avatarUrl: string) => {
   }
 };
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const setNotificationHandler = async () => {
+  const Notifications = await loadNotificationsModule();
+  if (!Notifications) return;
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
@@ -93,6 +106,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const presentLocalNotification = async (title: string, body: string) => {
     try {
+      await setNotificationHandler();
+      const Notifications = await loadNotificationsModule();
+      if (!Notifications) return;
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title,
@@ -121,19 +138,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    const registerNotifications = async () => {
+    const setupPushNotifications = async () => {
       try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== "granted") return;
-        const tokenData = await Notifications.getExpoPushTokenAsync();
-        console.log("Expo push token:", tokenData.data);
+        const token = await registerPushNotifications();
+        if (token && user.id) {
+          await savePushToken(user.id, token);
+        }
       } catch (error) {
-        console.warn("Notification registration failed:", error);
+        console.warn("Push notification setup failed:", error);
       }
     };
 
-    void registerNotifications();
-  }, []);
+    if (user.id && user.isLoggedIn) {
+      void setupPushNotifications();
+    }
+  }, [user.id, user.isLoggedIn]);
 
   useEffect(() => {
     let isMounted = true;
@@ -178,6 +197,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return () => unsubscribe();
     }
   }, [user.id, user.isLoggedIn, fetchAppData]);
+
+  // Realtime notifications listener to present local alerts instantly
+  useEffect(() => {
+    if (!user.id || !user.isLoggedIn) return;
+
+    const notifChannel = supabase
+      .channel(`user-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          if (payload.new) {
+            void presentLocalNotification(
+              payload.new.title || "MboaPay",
+              payload.new.message || ""
+            );
+            void refreshData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(notifChannel);
+    };
+  }, [user.id, user.isLoggedIn]);
 
   // Load persisted operator or auto-detect when user changes
   useEffect(() => {
@@ -564,6 +614,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           message: `${user.name || 'A member'} has requested to join ${circleData.name}.`,
         }));
         await supabase.from('notifications').insert(notifications);
+
+        // Send push notifications to all admins
+        for (const admin of admins) {
+          try {
+            await notifyAdminOfPendingMember(
+              admin.user_id,
+              user.name || 'A member',
+              circleData.name,
+              circleData.id
+            );
+          } catch (error) {
+            console.warn("Failed to send push notification to admin:", error);
+          }
+        }
       }
 
       await Promise.all([
@@ -585,8 +649,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveCircleMember = async (memberId: string) => {
-    const { error } = await supabase.from('circle_members').update({ member_status: 'active' }).eq('id', memberId).eq('member_status', 'pending');
+    // 1. Get the member details to know who to notify
+    const { data: memberData, error: fetchError } = await supabase
+      .from('circle_members')
+      .select('user_id, circle_id, circles(name)')
+      .eq('id', memberId)
+      .single();
+
+    if (fetchError) {
+      console.warn("Could not retrieve member details for approval:", fetchError.message);
+    }
+
+    // 2. Approve the member
+    const { error } = await supabase
+      .from('circle_members')
+      .update({ member_status: 'active' })
+      .eq('id', memberId)
+      .eq('member_status', 'pending');
     if (error) throw new Error(error.message);
+
+    // 3. Create a notification for the approved user
+    if (memberData) {
+      let circleName = "a savings circle";
+      if (memberData.circles) {
+        if (Array.isArray(memberData.circles)) {
+          circleName = memberData.circles[0]?.name || circleName;
+        } else {
+          circleName = (memberData.circles as any).name || circleName;
+        }
+      }
+      const approvedUserId = memberData.user_id;
+
+      // Create notification record
+      await supabase.from("notifications").insert({
+        user_id: approvedUserId,
+        type: "circle_approved",
+        title: "Join Request Approved",
+        message: `Your request to join "${circleName}" has been approved by the admin. You are now an active member!`,
+      });
+
+      // Send push notification to the approved user
+      try {
+        await notifyUserOfApproval(approvedUserId, circleName, memberData.circle_id);
+      } catch (error) {
+        console.warn("Failed to send push notification to approved member:", error);
+      }
+
+      // Present local notification for immediate feedback
+      await presentLocalNotification(
+        "Join Request Approved",
+        `Your request to join "${circleName}" has been approved!`
+      );
+    }
+
     await fetchAppData(user.id);
   };
 
