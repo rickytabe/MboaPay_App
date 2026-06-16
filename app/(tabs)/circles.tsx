@@ -26,7 +26,7 @@ export default function Circles() {
   };
 
   const renderCircleRow = (circle: Circle) => {
-    const isPending = circle.members.find(m => m.name === "You" || m.name === "You (Pending)")?.paid === false;
+    const isPending = circle.members.some(m => m.name === "You" && m.isPending);
     
     return (
       <TouchableOpacity

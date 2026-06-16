@@ -11,7 +11,7 @@ import Button from "../../components/Button";
 export default function AdminCircleDetail() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { circles, payCircleContribution } = useApp();
+  const { circles, payCircleContribution, approveCircleMember } = useApp();
   const [loading, setLoading] = useState(false);
 
   const circleId = params.id as string;
@@ -194,7 +194,11 @@ export default function AdminCircleDetail() {
               </View>
               
               <View style={styles.memberRight}>
-                {member.paid ? (
+                {member.isPending ? (
+                  <View style={styles.memberPendingBadge}>
+                    <Text style={styles.memberPendingText}>Pending</Text>
+                  </View>
+                ) : member.paid ? (
                   <View style={styles.memberPaidBadge}>
                     <Text style={styles.memberPaidText}>Paid</Text>
                   </View>
@@ -203,11 +207,30 @@ export default function AdminCircleDetail() {
                     <Text style={styles.memberUnpaidText}>Awaiting</Text>
                   </View>
                 )}
-                {member.name !== "You" && (
+                {member.isPending && member.role !== 'admin' ? (
+                  <TouchableOpacity
+                    onPress={async () => {
+                      try {
+                        setLoading(true);
+                        if (member.id) {
+                          await approveCircleMember(member.id);
+                          Alert.alert("Approved", `${member.name} has been approved.`);
+                        }
+                      } catch (e: any) {
+                        Alert.alert("Error", e.message || "Could not approve member.");
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                    style={styles.approveBtn}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                  </TouchableOpacity>
+                ) : member.name !== "You" ? (
                   <TouchableOpacity onPress={() => handleKickMember(member.name)} style={styles.kickBtn}>
                     <Ionicons name="close-circle" size={20} color={COLORS.error} />
                   </TouchableOpacity>
-                )}
+                ) : null}
               </View>
             </View>
             {idx < circle.members.length - 1 && <View style={styles.divider} />}
@@ -418,6 +441,17 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: COLORS.secondary,
   },
+  memberPendingBadge: {
+    backgroundColor: COLORS.primaryContainer + "15",
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: ROUNDED.full,
+  },
+  memberPendingText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: COLORS.primary,
+  },
   memberUnpaidBadge: {
     backgroundColor: COLORS.onSurfaceVariant + "15",
     paddingVertical: 3,
@@ -428,6 +462,9 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: COLORS.onSurfaceVariant,
+  },
+  approveBtn: {
+    padding: 4,
   },
   kickBtn: {
     padding: 4,

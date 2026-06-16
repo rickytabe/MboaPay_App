@@ -59,13 +59,16 @@ const mapNotification = (notification: any): AppNotification => ({
 });
 
 const mapCircle = (circle: any, currentUserId: string): Circle => {
-  const me = circle.circle_members.find((member: any) => member.users?.id === currentUserId);
-  const mappedMembers = circle.circle_members.map((member: any) => ({
-    name: member.users?.id === currentUserId ? "You" : member.users?.full_name || "Member",
+  const me = circle.circle_members?.find((member: any) => member.user_id === currentUserId);
+  const mappedMembers = (circle.circle_members || []).map((member: any) => ({
+    id: member.id,
+    name: member.user_id === currentUserId ? (member.member_status === 'pending' ? "You (Pending)" : "You") : member.users?.full_name || "Member",
     role: member.role || "member",
     paid: member.deposit_status === "paid",
     isPayout: false,
     avatar: `https://i.pravatar.cc/150?u=${member.users?.id || member.id}`,
+    status: member.member_status,
+    isPending: member.member_status === 'pending',
   }));
 
   return {
@@ -120,13 +123,14 @@ export const loadAppData = async (
   const { data: walletData } = await supabase.from("wallets").select("balance").eq("user_id", currentUserId).single();
   if (walletData) setWalletBalance(walletData.balance);
 
-  const { data: txData } = await supabase.from("transactions").select("*").order("created_at", { ascending: true });
+  const { data: txData } = await supabase.from("transactions").select("*").order("created_at", { ascending: false });
   if (txData) setTransactions(txData.map(mapTransaction));
 
   const { data: notifData } = await supabase.from("notifications").select("*").order("created_at", { ascending: false });
   if (notifData) setNotifications(notifData.map(mapNotification));
 
-  const { data: circlesData } = await supabase.from("circles").select("*, circle_members(*, users(id, full_name))");
+  const { data: circlesData, error: circlesError } = await supabase.from("circles").select("*, circle_members(*, users(id, full_name))");
+  if (circlesError) console.error("Circles fetch error:", circlesError);
   if (circlesData) setCircles(circlesData.map((circle: any) => mapCircle(circle, currentUserId)));
 
   const { data: escrowsData } = await supabase.from("escrows").select("*");

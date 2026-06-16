@@ -26,10 +26,11 @@ export default function CircleDetail() {
     );
   }
 
-  // Check if "You" (or "You (Pending)") has paid
+  // Check if "You" is a pending or active member
   const userMember = circle.members.find(
     (m) => m.name === "You" || m.name === "You (Pending)"
   );
+  const isPendingMember = userMember?.isPending;
   const userHasPaid = userMember ? userMember.paid : true;
 
   const handlePay = async () => {
@@ -131,7 +132,12 @@ export default function CircleDetail() {
 
       {/* Action Area */}
       <View style={styles.actionArea}>
-        {!userHasPaid ? (
+        {isPendingMember ? (
+          <View style={styles.pendingInfoBox}>
+            <Ionicons name="time-outline" size={20} color={COLORS.primary} />
+            <Text style={styles.pendingInfoText}>Your membership request is pending approval.</Text>
+          </View>
+        ) : !userHasPaid ? (
           <Button
             title={`Pay Contribution (${circle.contributionAmount.toLocaleString()} XAF)`}
             onPress={handlePay}
@@ -381,5 +387,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: "700",
     color: COLORS.onSurfaceVariant,
+  },
+  pendingInfoBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: COLORS.primaryContainer + "15",
+    paddingVertical: 14,
+    borderRadius: ROUNDED.md,
+    gap: 8,
+  },
+  pendingInfoText: {
+    color: COLORS.primary,
+    fontWeight: "700",
+    fontSize: 13,
   },
 });

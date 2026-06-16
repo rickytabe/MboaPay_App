@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
+import * as Notifications from "expo-notifications";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
@@ -46,6 +47,16 @@ const persistAvatar = async (userId: string, avatarUrl: string) => {
   }
 };
 
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [authSession, setAuthSession] = useState<Session | null>(null);
@@ -79,6 +90,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await fetchAppData(user.id);
     }
   };
+
+  const presentLocalNotification = async (title: string, body: string) => {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: "default",
+        },
+        trigger: null,
+      });
+    } catch (error) {
+      console.warn("Local notification failed:", error);
+    }
+  };
+
+  const createNotificationRecord = async (type: string, title: string, message: string, targetUserId?: string) => {
+    const userIdToUse = targetUserId || user.id;
+    if (!userIdToUse) return;
+    const { error } = await supabase.from("notifications").insert({
+      user_id: userIdToUse,
+      type,
+      title,
+      message,
+    });
+    if (error) {
+      console.warn("Notification record error:", error.message);
+    }
+  };
+
+  useEffect(() => {
+    const registerNotifications = async () => {
+      try {
+        const { status } = await Notifications.requestPermissionsAsync();
+        if (status !== "granted") return;
+        const tokenData = await Notifications.getExpoPushTokenAsync();
+        console.log("Expo push token:", tokenData.data);
+      } catch (error) {
+        console.warn("Notification registration failed:", error);
+      }
+    };
+
+    void registerNotifications();
+  }, []);
 
   useEffect(() => {
     let isMounted = true;
@@ -323,7 +378,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         pawapay_ref: finalStatus.depositId || depositId,
         metadata: finalStatus
       }).eq('id', depositId);
-      await supabase.rpc('increment_wallet_balance', { p_user_id: user.id, p_amount: amount });
+
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .update({ balance: walletBalance + amount })
+        .eq('user_id', user.id);
+      if (walletError) throw new Error(walletError.message || 'Failed to update wallet balance.');
+
+      await Promise.all([
+        createNotificationRecord(
+          'deposit',
+          'Wallet Top-up Successful',
+          `Your wallet has been topped up by ${amount.toLocaleString()} XAF.`
+        ),
+        presentLocalNotification(
+          'Top-up Successful',
+          `Added ${amount.toLocaleString()} XAF to your wallet.`
+        ),
+      ]);
+
       await fetchAppData(user.id);
       return depositId;
     } else {
@@ -370,12 +443,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       
       if (finalStatus.status === "COMPLETED") {
         // 4. Update transaction status and wallet balance
-        await supabase.from('transactions').update({ 
+        const { error: txUpdateError } = await supabase.from('transactions').update({ 
           status: 'successful',
           pawapay_ref: finalStatus.payoutId || payoutId,
           metadata: finalStatus
         }).eq('id', payoutId);
-        await supabase.rpc('decrement_wallet_balance', { p_user_id: user.id, p_amount: amount });
+        if (txUpdateError) throw new Error(txUpdateError.message || 'Failed to update transaction status.');
+
+        const { error: walletError } = await supabase
+          .from('wallets')
+          .update({ balance: walletBalance - amount })
+          .eq('user_id', user.id);
+        if (walletError) throw new Error(walletError.message || 'Failed to decrement wallet balance.');
+
+        setWalletBalance((current) => Math.max(current - amount, 0));
+
+        await Promise.all([
+          createNotificationRecord(
+            'disbursement',
+            'Transfer Successful',
+            `You sent ${amount.toLocaleString()} XAF to ${phone}.`
+          ),
+          presentLocalNotification(
+            'Transfer Completed',
+            `You sent ${amount.toLocaleString()} XAF to ${phone}.`
+          ),
+        ]);
+
         await fetchAppData(user.id);
         return payoutId;
       } else {
@@ -393,26 +487,107 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCircle = async (
-    name: string, type: 'solo' | 'pool' | 'rotation', goal: number, contribution: number, frequency: 'daily' | 'weekly' | 'monthly', maxMembers: number
+    name: string, type: 'solo' | 'pool' | 'rotation', goal: number, contribution: number, frequency: 'daily' | 'weekly' | 'monthly', maxMembers: number, visibility: 'public' | 'private' = 'private'
   ): Promise<{ id: string, name: string, code: string }> => {
-    const { data, error } = await supabase.rpc('create_circle', {
-      p_name: name,
-      p_goal_type: 'general',
-      p_circle_type: type,
-      p_target_amount: goal,
-      p_contribution_amount: contribution,
-      p_frequency: frequency
+    // Generate a random 6 character alphanumeric code
+    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+    
+    const { data: circleData, error: circleError } = await supabase.from('circles').insert({
+      creator_id: user.id,
+      name,
+      goal_type: 'general',
+      circle_type: type,
+      target_amount: goal,
+      contribution_amount: contribution,
+      frequency,
+      invite_code: code,
+      visibility: visibility
+    }).select().single();
+
+    if (circleError) throw new Error(circleError.message);
+
+    const { error: memberError } = await supabase.from('circle_members').insert({
+      circle_id: circleData.id,
+      user_id: user.id,
+      role: 'admin',
+      rotation_order: 1,
+      deposit_status: 'paid',
+      member_status: 'active'
     });
-    if (error) throw new Error(error.message);
+
+    if (memberError) throw new Error(memberError.message);
+
     await fetchAppData(user.id);
-    return { id: data?.id || "", name: data?.name || name, code: data?.invite_code || "" };
+    return { id: circleData.id, name: circleData.name, code: circleData.invite_code };
   };
 
   const joinCircleByCode = async (code: string): Promise<{ success: boolean; message: string }> => {
-    const { data, error } = await supabase.rpc('join_circle', { p_invite_code: code });
-    if (error) return { success: false, message: error.message };
+    // 1. Find the circle by invite code
+    const { data: circleData, error: fetchError } = await supabase.from('circles').select('id, name, circle_type, visibility').eq('invite_code', code).single();
+    if (fetchError || !circleData) return { success: false, message: 'Invalid or inactive invite code' };
+
+    // 2. Check if already a member
+    const { data: existing } = await supabase.from('circle_members').select('id').eq('circle_id', circleData.id).eq('user_id', user.id).maybeSingle();
+    if (existing) return { success: false, message: 'You are already a member of this circle' };
+
+    // 3. Count current members to set rotation order
+    const { count } = await supabase.from('circle_members').select('*', { count: 'exact', head: true }).eq('circle_id', circleData.id).neq('member_status', 'exited');
+    const memberCount = count || 0;
+    const isPrivate = circleData.visibility === 'private';
+
+    // 4. Insert the user into circle_members with pending status for private circles
+    const { error: insertError } = await supabase.from('circle_members').insert({
+      circle_id: circleData.id,
+      user_id: user.id,
+      role: 'member',
+      rotation_order: memberCount + 1,
+      deposit_status: isPrivate ? 'pending' : circleData.circle_type === 'rotation' ? 'pending' : 'paid',
+      member_status: isPrivate ? 'pending' : 'active'
+    });
+
+    if (insertError) return { success: false, message: insertError.message };
+
     await fetchAppData(user.id);
-    return { success: true, message: `Successfully joined ${data?.name || 'circle'}!` };
+
+    if (isPrivate) {
+      const { data: admins, error: adminError } = await supabase
+        .from('circle_members')
+        .select('user_id')
+        .eq('circle_id', circleData.id)
+        .eq('role', 'admin');
+
+      if (!adminError && admins?.length) {
+        const notifications = admins.map((admin: any) => ({
+          user_id: admin.user_id,
+          type: 'circle_join_request',
+          title: 'New join request',
+          message: `${user.name || 'A member'} has requested to join ${circleData.name}.`,
+        }));
+        await supabase.from('notifications').insert(notifications);
+      }
+
+      await Promise.all([
+        createNotificationRecord(
+          'circle_request',
+          'Join Request Sent',
+          `Your request to join ${circleData.name} is pending admin approval.`,
+          user.id
+        ),
+        presentLocalNotification(
+          'Join Request Pending',
+          `Your request to join ${circleData.name} is awaiting approval.`
+        ),
+      ]);
+      return { success: true, message: `Your request to join ${circleData.name} is pending approval.` };
+    }
+
+    return { success: true, message: `Successfully joined ${circleData.name}!` };
+  };
+
+  const approveCircleMember = async (memberId: string) => {
+    const { error } = await supabase.from('circle_members').update({ member_status: 'active' }).eq('id', memberId).eq('member_status', 'pending');
+    if (error) throw new Error(error.message);
+    await fetchAppData(user.id);
   };
 
   const payCircleContribution = async (circleId: string) => {
@@ -488,14 +663,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalStatus = await pollDepositUntilFinal(depositId);
 
     if (finalStatus.status === "COMPLETED") {
-      const { data: recipientId, error: rpcError } = await supabase.rpc('get_user_by_phone', { p_phone: otherParty });
-      if (rpcError || !recipientId) throw new Error("Recipient not found on MboaPay.");
+      const { data: recipient, error: recipientError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('phone', otherParty)
+        .maybeSingle();
+      if (recipientError || !recipient?.id) throw new Error("Recipient not found on MboaPay.");
 
       // 3. Create escrow record
       const { error: insertError } = await supabase.from('escrows').insert({
         id: depositId,
         sender_id: user.id,
-        recipient_id: recipientId,
+        recipient_id: recipient.id,
         amount,
         description: desc,
         status: 'locked'
@@ -560,7 +739,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markNotificationsAsRead = async () => {
     const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
     if (unreadIds.length === 0) return;
-    const { error } = await supabase.rpc('mark_notifications_read', { p_notification_ids: unreadIds });
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read: true })
+      .in('id', unreadIds)
+      .eq('user_id', user.id);
     if (!error) {
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     }
@@ -639,6 +822,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sendMoney,
         createCircle,
         joinCircleByCode,
+        approveCircleMember,
         payCircleContribution,
         createEscrowContract,
         releaseEscrowContract,

@@ -1,18 +1,22 @@
+import * as Contacts from 'expo-contacts';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, Image, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableWithoutFeedback, View, TouchableOpacity, Modal, FlatList } from "react-native";
-import * as Contacts from 'expo-contacts';
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
+import Card from "../components/Card";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import { COLORS, ROUNDED, SPACING } from "../constants/Theme";
 import { useApp } from "../context/AppContext";
+import { supabase } from "../lib/supabase";
+import { Ionicons } from '@expo/vector-icons';
 
 export default function Send() {
   const router = useRouter();
   const { sendMoney, walletBalance } = useApp();
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
+  const [recipientName, setRecipientName] = useState("");
   const [loading, setLoading] = useState(false);
   const [detectedOperator, setDetectedOperator] = useState<"MTN" | "Orange" | null>(null);
 
@@ -38,6 +42,38 @@ export default function Send() {
     } else {
         setDetectedOperator(null);
     }
+  }, [phone]);
+
+  useEffect(() => {
+    let active = true;
+
+    const lookupRecipient = async () => {
+      const clean = phone.replace(/[^0-9]/g, '');
+      if (clean.length < 9) {
+        setRecipientName("");
+        return;
+      }
+
+      const finalPhone = clean.startsWith('237') ? clean : `237${clean}`;
+      const phonePlus = `+${finalPhone}`;
+      const { data, error } = await supabase
+        .from('users')
+        .select('full_name')
+        .or(`phone.eq.${finalPhone},phone.eq.${phonePlus}`)
+        .maybeSingle();
+
+      if (!active) return;
+      if (!error && data?.full_name) {
+        setRecipientName(data.full_name);
+      } else {
+        setRecipientName("");
+      }
+    };
+
+    lookupRecipient();
+    return () => {
+      active = false;
+    };
   }, [phone]);
 
   const handleSend = async () => {
@@ -77,6 +113,8 @@ export default function Send() {
               txId,
               amount: value,
               operator: finalOperator,
+              recipientName: recipientName || finalPhone,
+              recipientPhone: finalPhone,
               type: "disbursement",
               title: "Transfer Successful",
             },
@@ -138,10 +176,20 @@ export default function Send() {
 
             <View style={styles.content}>
               {/* Balance Card */}
-              <View style={styles.balanceCard}>
-                  <Text style={styles.balanceLabel}>Available Balance</Text>
+              <Card variant="primary" style={styles.balanceCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.activeBadgeContainer}>
+                    <Ionicons name="checkmark-circle" size={14} color={COLORS.tertiaryContainer} />
+                    <Text style={styles.activeBadgeText}>Available for transfer</Text>
+                  </View>
+                  <Ionicons name="card-outline" size={20} color="#ffffff" style={{ opacity: 0.8 }} />
+                </View>
+
+                <View style={styles.balanceInfoContainer}>
+                  <Text style={styles.balanceLabel}>Total Balance</Text>
                   <Text style={styles.balanceText}>{walletBalance.toLocaleString()} XAF</Text>
-              </View>
+                </View>
+              </Card>
 
               {/* Amount Input */}
               <View style={styles.inputContainer}>
@@ -194,6 +242,9 @@ export default function Send() {
                           )}
                       </View>
                   </View>
+                  {recipientName ? (
+                    <Text style={styles.recipientText}>Recipient: {recipientName}</Text>
+                  ) : null}
               </View>
             </View>
 
@@ -255,22 +306,45 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   balanceCard: {
-      backgroundColor: COLORS.surfaceContainer,
-      padding: 16,
-      borderRadius: ROUNDED.md,
-      marginBottom: 24,
-      alignItems: 'center',
+    marginBottom: 24,
+    padding: 20,
+    borderRadius: 20,
+    justifyContent: "center",
+  },
+  cardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  activeBadgeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255, 204, 0, 0.18)", // Semi-transparent Gold
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: ROUNDED.full,
+    gap: 4,
+  },
+  activeBadgeText: {
+    color: COLORS.tertiaryContainer,
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  balanceInfoContainer: {
+    marginTop: 20,
+    marginBottom: 4,
   },
   balanceLabel: {
-      fontSize: 12,
-      color: COLORS.onSurfaceVariant,
-      fontWeight: '600',
-      marginBottom: 4,
+    color: "rgba(255, 255, 255, 0.7)",
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
   },
   balanceText: {
-      fontSize: 24,
-      color: COLORS.primary,
-      fontWeight: '800',
+    color: "#ffffff",
+    fontSize: 28,
+    fontWeight: "800",
+    marginTop: 4,
   },
   inputContainer: {
       marginBottom: 20,
@@ -298,6 +372,11 @@ const styles = StyleSheet.create({
       width: 26,
       height: 26,
       borderRadius: 13,
+  },
+  recipientText: {
+      fontSize: 13,
+      color: COLORS.onSurfaceVariant,
+      marginTop: 8,
   },
   input: {
       backgroundColor: COLORS.surface,

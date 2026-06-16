@@ -21,11 +21,14 @@ export interface Transaction {
 }
 
 export interface CircleMember {
+  id?: string;
   name: string;
   role?: string;
   paid: boolean;
   isPayout: boolean;
   avatar: string;
+  status?: string;
+  isPending?: boolean;
 }
 
 export interface Circle {
@@ -91,6 +94,7 @@ export interface AppContextType {
   sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;
   createCircle: (name: string, type: "solo" | "pool" | "rotation", goal: number, contribution: number, frequency: "daily" | "weekly" | "monthly", maxMembers: number, visibility: 'public' | 'private') => Promise<{ id: string; name: string; code: string }>;
   joinCircleByCode: (code: string) => Promise<{ success: boolean; message: string }>;
+  approveCircleMember: (memberId: string) => Promise<void>;
   payCircleContribution: (circleId: string) => Promise<void>;
   createEscrowContract: (title: string, desc: string, amount: number, otherParty: string, role: "buyer" | "seller") => Promise<void>;
   releaseEscrowContract: (escrowId: string) => Promise<void>;

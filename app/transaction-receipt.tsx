@@ -1,11 +1,14 @@
-import React from "react";
-import { StyleSheet, Text, View, Share } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
+import * as FileSystem from "expo-file-system";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { shareAsync } from "expo-sharing";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import React from "react";
+import { Alert, Share, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import Card from "../components/Card";
+import { COLORS, ROUNDED, SPACING, TYPOGRAPHY } from "../constants/Theme";
 
 export default function TransactionReceipt() {
   const router = useRouter();
@@ -14,15 +17,75 @@ export default function TransactionReceipt() {
   const amount = parseFloat(params.amount as string);
   const operator = params.operator as string;
   const txId = params.txId as string;
-  const title = params.title as string || "Transaction Completed";
+  const title = (params.title as string) || "Transaction Completed";
+  const recipientName = params.recipientName as string | undefined;
+  const recipientPhone = params.recipientPhone as string | undefined;
+  const displayRecipient = recipientName || recipientPhone || "Recipient";
 
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `MboaPay Receipt:\nStatus: Success\nTransaction: ${title}\nAmount: ${amount.toLocaleString()} XAF\nOperator: ${operator}\nTx ID: ${txId}`,
+        message: `MboaPay Receipt:\nStatus: Success\nTransaction: ${title}\nAmount: ${amount.toLocaleString()} XAF\nRecipient: ${displayRecipient}\nOperator: ${operator}\nTx ID: ${txId}`,
       });
     } catch (e) {
       console.log(e);
+    }
+  };
+
+  const handleDownloadReceipt = async () => {
+    try {
+      const pdfDoc = await PDFDocument.create();
+      const page = pdfDoc.addPage([612, 792]);
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const titleSize = 24;
+      const regularSize = 12;
+      const leftX = 48;
+      let y = 740;
+
+      page.drawText("MboaPay Receipt", {
+        x: leftX,
+        y,
+        size: titleSize,
+        font,
+        color: rgb(0.12, 0.12, 0.12),
+      });
+      y -= 40;
+
+      page.drawText(`Date: ${new Date().toLocaleString("en-GB")}`, {
+        x: leftX,
+        y,
+        size: regularSize,
+        font,
+        color: rgb(0.35, 0.35, 0.35),
+      });
+      y -= 24;
+
+      page.drawText(`Transaction: ${title}`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Amount: ${amount.toLocaleString()} XAF`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Recipient: ${displayRecipient}`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Operator: ${operator === "MTN" ? "MTN MoMo" : "Orange Money"}`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Transaction ID: ${txId}`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Status: SUCCESS`, { x: leftX, y, size: regularSize, font, color: rgb(0, 0.55, 0.2) });
+
+      const pdfBase64 = await pdfDoc.saveAsBase64({ dataUri: false });
+      const fileRoot = (FileSystem as any).cacheDirectory || (FileSystem as any).documentDirectory || "";
+      const fileUri = `${fileRoot}mboapay_receipt_${txId}.pdf`;
+      await FileSystem.writeAsStringAsync(fileUri, pdfBase64, {
+        encoding: "base64",
+      });
+
+      await shareAsync(fileUri, {
+        mimeType: "application/pdf",
+        dialogTitle: "Download MboaPay Receipt",
+      });
+    } catch (error) {
+      console.log("Receipt PDF error", error);
+      Alert.alert("Receipt failed", "Unable to create the receipt PDF. Please try again.");
     }
   };
 
@@ -92,6 +155,12 @@ export default function TransactionReceipt() {
         <Button
           title="Share Receipt"
           onPress={handleShare}
+          type="outlined"
+          style={styles.shareBtn}
+        />
+        <Button
+          title="Download PDF"
+          onPress={handleDownloadReceipt}
           type="outlined"
           style={styles.shareBtn}
         />

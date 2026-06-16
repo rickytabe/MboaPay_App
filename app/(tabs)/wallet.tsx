@@ -14,10 +14,13 @@ export default function Wallet() {
   const { walletBalance, transactions, selectedOperator, setOperator } = useApp();
   const [activeTab, setActiveTab] = useState<"all" | "deposit" | "send">("all");
 
+  const isInflowType = (type: string) => ["top_up", "refund", "escrow_release"].includes(type);
+  const isOutflowType = (type: string) => ["disbursement", "contribution", "escrow_lock"].includes(type);
+
   const filteredTransactions = transactions.filter((tx) => {
     if (activeTab === "all") return true;
-    if (activeTab === "deposit") return tx.type === "top_up" || tx.type === "refund" || tx.type === "disbursement" || tx.type === "escrow_release";
-    if (activeTab === "send") return tx.type === "contribution" || tx.type === "escrow_lock";
+    if (activeTab === "deposit") return isInflowType(tx.type);
+    if (activeTab === "send") return isOutflowType(tx.type);
     return true;
   });
 
@@ -42,7 +45,7 @@ export default function Wallet() {
 
   const renderTransactionRow = (item: Transaction, idx: number) => {
     const icon = getTransactionIcon(item.type);
-    const isPositive = ["top_up", "refund", "disbursement", "escrow_release"].includes(item.type);
+    const isPositive = isInflowType(item.type);
     
     return (
       <View key={item.id}>
@@ -174,7 +177,7 @@ const styles = StyleSheet.create({
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
     paddingTop: 50,
-    paddingBottom: 30,
+    paddingBottom: 120,
   },
   mnoSection: {
     marginTop: 16,
