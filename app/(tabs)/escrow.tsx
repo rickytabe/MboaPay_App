@@ -1,13 +1,14 @@
-import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Button from "../../components/Button";
+import Card from "../../components/Card";
+import TopNavBarComponent from "../../components/TopNavBarComponent";
+import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Escrow } from "../../context/types";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
-import TopNavBarComponent from "../../components/TopNavBarComponent";
-import Card from "../../components/Card";
-import Button from "../../components/Button";
 
 export default function EscrowHome() {
   const router = useRouter();
@@ -83,6 +84,7 @@ export default function EscrowHome() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <SafeAreaView>
       <TopNavBarComponent title="Escrow Protection" />
 
       {/* Overview Stats Cards */}
@@ -124,6 +126,7 @@ export default function EscrowHome() {
           </View>
         )}
       </View>
+      </SafeAreaView>
     </ScrollView>
   );
 }
@@ -135,7 +138,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
-    paddingTop: 50,
     paddingBottom: 30,
   },
   statsContainer: {

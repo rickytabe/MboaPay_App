@@ -1,12 +1,12 @@
-import React from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
+﻿import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
-import { useApp } from "../../context/AppContext";
-import type { Transaction, Circle } from "../../context/types";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
-import TopNavBarComponent from "../../components/TopNavBarComponent";
+import React from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Card from "../../components/Card";
+import TopNavBarComponent from "../../components/TopNavBarComponent";
+import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
+import { useApp } from "../../context/AppContext";
+import type { Circle, Transaction } from "../../context/types";
 
 export default function Home() {
   const router = useRouter();
@@ -290,7 +290,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
-    paddingTop: 50,
     paddingBottom: 110, // Generous padding to clear the custom elevated tab bar
   },
   welcomeSection: {

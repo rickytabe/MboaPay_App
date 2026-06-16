@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Card from "../../components/Card";
+import TopNavBarComponent from "../../components/TopNavBarComponent";
+import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Circle } from "../../context/types";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
-import TopNavBarComponent from "../../components/TopNavBarComponent";
-import Card from "../../components/Card";
-import Button from "../../components/Button";
 
 export default function Circles() {
   const router = useRouter();
@@ -107,6 +107,7 @@ export default function Circles() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+        <SafeAreaView>
       <TopNavBarComponent title="Savings Circles" />
 
       {/* Intro Cards */}
@@ -189,6 +190,7 @@ export default function Circles() {
           )}
         </View>
       )}
+      </SafeAreaView>
     </ScrollView>
   );
 }
@@ -200,7 +202,6 @@ const styles = StyleSheet.create({
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
-    paddingTop: 50,
     paddingBottom: 30,
   },
   actionHeaderCards: {

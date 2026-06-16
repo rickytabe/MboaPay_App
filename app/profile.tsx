@@ -1,18 +1,21 @@
-import React from "react";
-import { StyleSheet, Text, View, Image, ScrollView, Alert } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useApp } from "../context/AppContext";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
-import TopNavBarComponent from "../components/TopNavBarComponent";
-import Card from "../components/Card";
+import * as ImagePicker from "expo-image-picker";
+import { useRouter } from "expo-router";
+import React from "react";
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
+import Card from "../components/Card";
+import TopNavBarComponent from "../components/TopNavBarComponent";
+import { COLORS, SPACING } from "../constants/Theme";
+import { useApp } from "../context/AppContext";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../lib/errors";
 
+
 export default function Profile() {
   const router = useRouter();
-  const { user, logout, selectedOperator } = useApp();
+  const { user, logout, selectedOperator, updateAvatar } = useApp();
   const toast = useToast();
 
   const performLogout = async () => {
@@ -43,18 +46,48 @@ export default function Profile() {
     );
   };
 
+  const handlePickAvatar = async () => {
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        toast.error("Permission denied", "Allow gallery access to update your profile photo.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const uri = result.assets[0].uri;
+        await updateAvatar(uri);
+        toast.success("Profile updated", "Your avatar has been saved locally.");
+      }
+    } catch (err) {
+      const message = getErrorMessage(err, "Could not update avatar. Please try again.");
+      toast.error("Avatar update failed", message);
+    }
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+      <SafeAreaView>
       <TopNavBarComponent title="My Profile" />
 
       {/* Profile Header Hero */}
       <View style={styles.heroSection}>
-        <View style={styles.avatarWrapper}>
+        <TouchableOpacity style={styles.avatarWrapper} onPress={handlePickAvatar}>
           <Image
             source={{ uri: user.avatarUrl || "https://i.pravatar.cc/150" }}
             style={styles.avatar}
           />
-        </View>
+          <View style={styles.avatarOverlay}>
+            <Ionicons name="camera" size={18} color="#fff" />
+          </View>
+        </TouchableOpacity>
         <Text style={styles.nameText}>{user.name || "MboaPay User"}</Text>
         <Text style={styles.phoneText}>{user.phone || "No phone linked"}</Text>
       </View>
@@ -123,9 +156,12 @@ export default function Profile() {
           style={styles.logoutBtn}
           textStyle={{ color: COLORS.error }}
         />
-        <Text style={styles.versionText}>MboaPay v1.0.0 (Expo 54)</Text>
+      
       </View>
+        <Text style={styles.versionText}>MboaPay v1.0.0</Text>
+       </SafeAreaView>
     </ScrollView>
+   
   );
 }
 
@@ -133,11 +169,14 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+   
+    
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
-    paddingTop: 50,
+    // paddingTop: 20,
     paddingBottom: 40,
+   
   },
   heroSection: {
     alignItems: "center",
@@ -156,10 +195,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.8,
     shadowRadius: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatar: {
     width: "100%",
     height: "100%",
+  },
+  avatarOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   nameText: {
     fontSize: 20,
@@ -188,7 +240,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 12,
+    paddingVertical: 8,
     paddingHorizontal: SPACING.md,
   },
   rowLeft: {
@@ -222,10 +274,13 @@ const styles = StyleSheet.create({
   },
   logoutBtn: {
     borderColor: COLORS.error,
+      // marginBottom: 40,
   },
   versionText: {
     fontSize: 11,
     color: COLORS.onSurfaceVariant,
     fontWeight: "600",
+    paddingTop: 8,
+    textAlign: "center"
   },
 });
