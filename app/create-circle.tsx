@@ -6,7 +6,17 @@ import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import Button from "../components/Button";
 
-const FREQUENCIES = ["Weekly", "Bi-Weekly", "Monthly"];
+const FREQUENCIES: { id: 'daily'|'weekly'|'monthly', label: string }[] = [
+  { id: 'daily', label: 'Daily' },
+  { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' }
+];
+
+const CIRCLE_TYPES: { id: 'solo'|'pool'|'rotation', label: string }[] = [
+  { id: 'solo', label: 'Solo Savings' },
+  { id: 'pool', label: 'Group Pool' },
+  { id: 'rotation', label: 'Tontine (Rotation)' }
+];
 
 export default function CreateCircle() {
   const router = useRouter();
@@ -14,8 +24,10 @@ export default function CreateCircle() {
   const [name, setName] = useState("");
   const [goal, setGoal] = useState("");
   const [contribution, setContribution] = useState("");
-  const [frequency, setFrequency] = useState("Monthly");
+  const [frequency, setFrequency] = useState<'daily'|'weekly'|'monthly'>('monthly');
+  const [circleType, setCircleType] = useState<'solo'|'pool'|'rotation'>('pool');
   const [maxMembers, setMaxMembers] = useState("10");
+  const [visibility, setVisibility] = useState<'public'|'private'>('private');
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
@@ -42,7 +54,7 @@ export default function CreateCircle() {
 
     setLoading(true);
     try {
-      const newCircle = await createCircle(name.trim(), 'Tontine', goalNum, contribNum, frequency as 'Weekly'|'Monthly', membersNum);
+      const newCircle = await createCircle(name.trim(), circleType, goalNum, contribNum, frequency, membersNum, visibility);
       Alert.alert(
         "Circle Created",
         `"${newCircle.name}" has been created successfully. Use code "${newCircle.code}" to invite members.`,
@@ -104,24 +116,51 @@ export default function CreateCircle() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Contribution Frequency</Text>
+              <Text style={styles.label}>Circle Type</Text>
               <View style={styles.freqRow}>
-                {FREQUENCIES.map((freq) => (
+                {CIRCLE_TYPES.map((type) => (
                   <TouchableOpacity
-                    key={freq}
+                    key={type.id}
                     style={[
                       styles.freqButton,
-                      frequency === freq && styles.freqButtonSelected,
+                      circleType === type.id && styles.freqButtonSelected,
                     ]}
-                    onPress={() => setFrequency(freq)}
+                    onPress={() => setCircleType(type.id)}
                   >
                     <Text
                       style={[
                         styles.freqText,
-                        frequency === freq && styles.freqTextSelected,
+                        circleType === type.id && styles.freqTextSelected,
+                      ]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {type.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Contribution Frequency</Text>
+              <View style={styles.freqRow}>
+                {FREQUENCIES.map((freq) => (
+                  <TouchableOpacity
+                    key={freq.id}
+                    style={[
+                      styles.freqButton,
+                      frequency === freq.id && styles.freqButtonSelected,
+                    ]}
+                    onPress={() => setFrequency(freq.id)}
+                  >
+                    <Text
+                      style={[
+                        styles.freqText,
+                        frequency === freq.id && styles.freqTextSelected,
                       ]}
                     >
-                      {freq}
+                      {freq.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -138,6 +177,29 @@ export default function CreateCircle() {
                 value={maxMembers}
                 onChangeText={setMaxMembers}
               />
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Visibility</Text>
+              <View style={styles.freqRow}>
+                <TouchableOpacity
+                  style={[styles.freqButton, visibility === 'private' && styles.freqButtonSelected]}
+                  onPress={() => setVisibility('private')}
+                >
+                  <Text style={[styles.freqText, visibility === 'private' && styles.freqTextSelected]}>Private</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.freqButton, visibility === 'public' && styles.freqButtonSelected]}
+                  onPress={() => setVisibility('public')}
+                >
+                  <Text style={[styles.freqText, visibility === 'public' && styles.freqTextSelected]}>Public</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.helpText}>
+                {visibility === 'public' 
+                  ? "Anyone can find and join this group from the Explore tab." 
+                  : "Only people with the invite code can join this group."}
+              </Text>
             </View>
           </View>
         </View>
@@ -223,6 +285,12 @@ const styles = StyleSheet.create({
   freqTextSelected: {
     color: COLORS.primaryContainer,
     fontWeight: "700",
+  },
+  helpText: {
+    fontSize: 12,
+    color: COLORS.onSurfaceVariant,
+    marginTop: 4,
+    fontStyle: 'italic'
   },
   bottomSection: {
     marginTop: 20,

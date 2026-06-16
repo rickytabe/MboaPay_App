@@ -157,7 +157,9 @@ export default function Register() {
       let cleanMessage = rawMessage;
       
       try {
-        if (rawMessage.includes("{")) {
+        if (rawMessage.includes("unexpected_failure") || rawMessage.includes('"status":500')) {
+          cleanMessage = "This phone number may already be registered. Please try logging in or use a different number.";
+        } else if (rawMessage.includes("{")) {
           const jsonStr = rawMessage.substring(rawMessage.indexOf("{"));
           const parsed = JSON.parse(jsonStr);
           cleanMessage = parsed.message || parsed.error_description || parsed.msg || "Registration failed.";
@@ -234,6 +236,7 @@ export default function Register() {
               <TextInput
                 style={styles.standardInput}
                 placeholder="e.g. John Doe"
+                placeholderTextColor={COLORS.outline}
                 value={fullName}
                 onChangeText={setFullName}
                 autoCapitalize="words"
@@ -246,6 +249,7 @@ export default function Register() {
               <TextInput
                 style={styles.standardInput}
                 placeholder="you@example.com"
+                placeholderTextColor={COLORS.outline}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -260,6 +264,7 @@ export default function Register() {
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="••••••••"
+                  placeholderTextColor={COLORS.outline}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}

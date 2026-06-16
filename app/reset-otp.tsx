@@ -14,18 +14,17 @@ import { COLORS, SPACING } from "../constants/Theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../components/Button";
 import { useToast } from "../context/ToastContext";
-import { getErrorMessage } from "../lib/errors";
 
 const OTP_LENGTH = 6;
 const COUNTDOWN_SECONDS = 30;
 
-export default function OtpVerification() {
+export default function ResetOtpVerification() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email: string }>();
-  const { verifyOtp, pendingEmail, resendSignupOtp } = useApp();
+  const { verifyPasswordResetOtp, requestPasswordReset } = useApp();
   const toast = useToast();
 
-  const email = params.email || pendingEmail;
+  const email = params.email || "";
   const maskedEmail = email
     ? `${email.charAt(0)}${"*".repeat(Math.max(0, email.indexOf("@") - 1))}${email.substring(email.indexOf("@"))}`
     : "";
@@ -127,7 +126,7 @@ export default function OtpVerification() {
       return;
     }
     if (!email) {
-      setError("Email is missing. Please go back and register again.");
+      setError("Email is missing. Please go back and request reset again.");
       triggerShake();
       return;
     }
@@ -136,17 +135,14 @@ export default function OtpVerification() {
       setIsSubmitting(true);
       setError("");
 
-      await verifyOtp(email, otpCode);
+      await verifyPasswordResetOtp(email, otpCode);
 
-      toast.success("Verified!", "Your account is now active.");
-      router.replace("/(tabs)/home");
+      // On success, go to set-new-password
+      router.replace("/set-new-password");
     } catch (err: any) {
-      console.error("OTP VERIFY ERROR:", err);
-      const message = getErrorMessage(err, "Verification failed. Please try again.");
-      setError(message);
-      toast.error("Verification Failed", message);
+      console.error("OTP RESET VERIFY ERROR:", err);
+      setError(err.message || "Verification failed. Please try again.");
       triggerShake();
-      // Clear all OTP fields for re-entry
       setOtp(Array(OTP_LENGTH).fill(""));
       inputRefs.current[0]?.focus();
     } finally {
@@ -156,16 +152,16 @@ export default function OtpVerification() {
 
   const handleResend = async () => {
     if (!email) {
-      toast.error("Error", "Email not found. Please try registering again.");
+      toast.error("Error", "Email not found. Please try requesting a reset again.");
       return;
     }
     
     try {
       setIsSubmitting(true);
-      await resendSignupOtp(email);
-      toast.success("Code Sent", "A new verification code has been sent to your email.");
+      await requestPasswordReset(email);
+      toast.success("Code Sent", "A new reset code has been sent to your email.");
     } catch (err: any) {
-      toast.error("Error", err.message || "Failed to resend verification code.");
+      toast.error("Error", err.message || "Failed to resend reset code.");
     } finally {
       setIsSubmitting(false);
     }
@@ -183,17 +179,16 @@ export default function OtpVerification() {
         >
           <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Verify Email</Text>
+        <Text style={styles.headerTitle}>Verify Reset Code</Text>
         <View style={styles.headerSpacer} />
       </View>
 
       <View style={styles.content}>
-        {/* Lock Icon */}
         <View style={styles.iconContainer}>
-          <Ionicons name="mail-open-outline" size={48} color={COLORS.primary} />
+          <Ionicons name="key-outline" size={48} color={COLORS.primary} />
         </View>
 
-        <Text style={styles.title}>Check your email</Text>
+        <Text style={styles.title}>Enter OTP</Text>
         <Text style={styles.subtitle}>
           We sent a 6-digit verification code to
         </Text>
@@ -249,7 +244,7 @@ export default function OtpVerification() {
 
       <View style={[styles.bottomSection, { bottom: keyboardHeight > 0 ? keyboardHeight + 14 : 36 }]}>
         <Button
-          title={isSubmitting ? "Verifying..." : "Verify & Continue"}
+          title={isSubmitting ? "Verifying..." : "Verify OTP"}
           onPress={handleVerify}
           disabled={!isComplete || isSubmitting}
           loading={isSubmitting}

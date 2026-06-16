@@ -14,6 +14,9 @@ export default function Circles() {
   const { circles } = useApp();
   const [activeTab, setActiveTab] = useState<"joined" | "explore">("joined");
 
+  const joinedCircles = circles.filter(c => c.isMember);
+  const exploreCircles = circles.filter(c => !c.isMember && c.visibility === 'public');
+
   const handleCreateCircle = () => {
     router.push("/create-circle");
   };
@@ -29,7 +32,13 @@ export default function Circles() {
       <TouchableOpacity
         key={circle.id}
         activeOpacity={0.95}
-        onPress={() => router.push(`/circle-detail/${circle.id}`)}
+        onPress={() => {
+          if (circle.isTreasurer) {
+            router.push({ pathname: "/admin-circle/[id]", params: { id: circle.id } } as any);
+          } else {
+            router.push({ pathname: "/circle-detail/[id]", params: { id: circle.id } } as any);
+          }
+        }}
       >
         <Card variant="elevated" style={styles.circleRowCard}>
           <View style={styles.cardHeader}>
@@ -138,8 +147,8 @@ export default function Circles() {
       {/* List Content */}
       {activeTab === "joined" ? (
         <View style={styles.listSection}>
-          {circles.length > 0 ? (
-            circles.map(renderCircleRow)
+          {joinedCircles.length > 0 ? (
+            joinedCircles.map(renderCircleRow)
           ) : (
             <View style={styles.emptyContainer}>
               <Ionicons name="people-outline" size={48} color={COLORS.outline} />
@@ -150,39 +159,34 @@ export default function Circles() {
         </View>
       ) : (
         <View style={styles.exploreSection}>
-          <Card variant="outlined" style={styles.exploreCard}>
-            <View style={styles.exploreHeader}>
-              <View style={styles.typeBadgeContainer}>
-                <Text style={styles.typeBadgeText}>TONTINE</Text>
-              </View>
-              <Text style={styles.joinText}>Public Pool</Text>
+          {exploreCircles.length > 0 ? (
+            exploreCircles.map((circle) => (
+              <Card key={circle.id} variant="outlined" style={styles.exploreCard}>
+                <View style={styles.exploreHeader}>
+                  <View style={styles.typeBadgeContainer}>
+                    <Text style={styles.typeBadgeText}>{circle.type.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.joinText}>Public Pool</Text>
+                </View>
+                <Text style={styles.exploreName}>{circle.name}</Text>
+                <Text style={styles.exploreDesc}>A secure community savings pool.</Text>
+                <View style={styles.exploreFooter}>
+                  <Text style={styles.exploreStats}>
+                    {circle.contributionAmount.toLocaleString()} XAF/{circle.frequency === 'daily' ? 'd' : circle.frequency === 'weekly' ? 'wk' : 'mo'} • {circle.membersCount} Members
+                  </Text>
+                  <TouchableOpacity style={styles.exploreJoinButton} onPress={() => router.push({ pathname: "/join-circle", params: { code: circle.code } } as any)}>
+                    <Text style={styles.exploreJoinText}>Join</Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            ))
+          ) : (
+            <View style={styles.emptyContainer}>
+              <Ionicons name="search-outline" size={48} color={COLORS.outline} />
+              <Text style={styles.emptyTitle}>No public circles found</Text>
+              <Text style={styles.emptySubtitle}>There are currently no public savings groups available to join.</Text>
             </View>
-            <Text style={styles.exploreName}>Yaounde Market Women Savings</Text>
-            <Text style={styles.exploreDesc}>A secure community pool for agricultural wholesale traders.</Text>
-            <View style={styles.exploreFooter}>
-              <Text style={styles.exploreStats}>25,000 XAF/mo • 14 Members</Text>
-              <TouchableOpacity style={styles.exploreJoinButton} onPress={() => router.push("/join-circle")}>
-                <Text style={styles.exploreJoinText}>Join</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
-
-          <Card variant="outlined" style={styles.exploreCard}>
-            <View style={styles.exploreHeader}>
-              <View style={styles.typeBadgeContainer}>
-                <Text style={styles.typeBadgeText}>GOAL</Text>
-              </View>
-              <Text style={styles.joinText}>Public Pool</Text>
-            </View>
-            <Text style={styles.exploreName}>West Region Investment Group</Text>
-            <Text style={styles.exploreDesc}>Savings pool for community building land development targets.</Text>
-            <View style={styles.exploreFooter}>
-              <Text style={styles.exploreStats}>50,000 XAF/mo • 8 Members</Text>
-              <TouchableOpacity style={styles.exploreJoinButton} onPress={() => router.push("/join-circle")}>
-                <Text style={styles.exploreJoinText}>Join</Text>
-              </TouchableOpacity>
-            </View>
-          </Card>
+          )}
         </View>
       )}
     </ScrollView>

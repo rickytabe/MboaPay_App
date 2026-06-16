@@ -9,7 +9,12 @@ import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/
 import { loadAppData, subscribeToAppData, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
 import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
 
-const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+const generateId = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -277,26 +282,90 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     if (finalStatus.status === "COMPLETED") {
       // 4. Update transaction status and wallet balance
-      await supabase.from('transactions').update({ status: 'successful' }).eq('id', depositId);
+      await supabase.from('transactions').update({ 
+        status: 'successful',
+        pawapay_ref: finalStatus.depositId || depositId,
+        metadata: finalStatus
+      }).eq('id', depositId);
       await supabase.rpc('increment_wallet_balance', { p_user_id: user.id, p_amount: amount });
       await fetchAppData(user.id);
       return depositId;
     } else {
-      await supabase.from('transactions').update({ status: 'failed' }).eq('id', depositId);
+      await supabase.from('transactions').update({ 
+        status: 'failed',
+        pawapay_ref: finalStatus.depositId || depositId,
+        metadata: finalStatus
+      }).eq('id', depositId);
       throw new Error(`Deposit failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
     }
   };
 
+  const sendMoney = async (amount: number, phone: string, operator: 'MTN' | 'Orange', note: string): Promise<string> => {
+    try {
+      if (amount > walletBalance) {
+        throw new Error("Insufficient wallet balance for this transfer.");
+      }
+
+      const payoutId = generateId();
+      const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+      // 1. Insert a pending transaction first to be safe
+      const { error: txError } = await supabase.from('transactions').insert({
+        id: payoutId,
+        user_id: user.id,
+        amount,
+        type: 'disbursement',
+        status: 'pending',
+        mno_provider: operator
+      });
+      if (txError) throw new Error(txError.message);
+
+      // 2. Initiate payout
+      await initiatePayout({
+        payoutId,
+        phoneNumber: phone,
+        provider,
+        amount,
+        note: note || "Wallet Transfer",
+      });
+
+      // 3. Poll for completion
+      const finalStatus = await pollPayoutUntilFinal(payoutId);
+      
+      if (finalStatus.status === "COMPLETED") {
+        // 4. Update transaction status and wallet balance
+        await supabase.from('transactions').update({ 
+          status: 'successful',
+          pawapay_ref: finalStatus.payoutId || payoutId,
+          metadata: finalStatus
+        }).eq('id', payoutId);
+        await supabase.rpc('decrement_wallet_balance', { p_user_id: user.id, p_amount: amount });
+        await fetchAppData(user.id);
+        return payoutId;
+      } else {
+        await supabase.from('transactions').update({ 
+          status: 'failed',
+          pawapay_ref: finalStatus.payoutId || payoutId,
+          metadata: finalStatus
+        }).eq('id', payoutId);
+        throw new Error(`Transfer failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error("[sendMoney] Exception:", error);
+      throw error;
+    }
+  };
+
   const createCircle = async (
-    name: string, type: 'Tontine' | 'Goal', goal: number, contribution: number, frequency: 'Weekly' | 'Monthly', maxMembers: number
+    name: string, type: 'solo' | 'pool' | 'rotation', goal: number, contribution: number, frequency: 'daily' | 'weekly' | 'monthly', maxMembers: number
   ): Promise<{ id: string, name: string, code: string }> => {
     const { data, error } = await supabase.rpc('create_circle', {
       p_name: name,
-      p_goal_type: type === 'Tontine' ? 'general' : 'specific',
-      p_circle_type: type.toLowerCase() === 'tontine' ? 'rotation' : 'saving',
+      p_goal_type: 'general',
+      p_circle_type: type,
       p_target_amount: goal,
       p_contribution_amount: contribution,
-      p_frequency: frequency.toLowerCase()
+      p_frequency: frequency
     });
     if (error) throw new Error(error.message);
     await fetchAppData(user.id);
@@ -383,11 +452,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const finalStatus = await pollDepositUntilFinal(depositId);
 
     if (finalStatus.status === "COMPLETED") {
+      const { data: recipientId, error: rpcError } = await supabase.rpc('get_user_by_phone', { p_phone: otherParty });
+      if (rpcError || !recipientId) throw new Error("Recipient not found on MboaPay.");
+
       // 3. Create escrow record
       const { error: insertError } = await supabase.from('escrows').insert({
         id: depositId,
         sender_id: user.id,
-        recipient_phone: otherParty,
+        recipient_id: recipientId,
         amount,
         description: desc,
         status: 'locked'
@@ -447,6 +519,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+ 
+
   const markNotificationsAsRead = async () => {
     const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
     if (unreadIds.length === 0) return;
@@ -473,6 +547,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     resetAppState();
   };
 
+  const requestPasswordReset = async (email: string) => {
+    ensureSupabaseConfigured();
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: false,
+      },
+    });
+    if (error) throw new Error(error.message);
+  };
+
+  const verifyPasswordResetOtp = async (email: string, token: string) => {
+    ensureSupabaseConfigured();
+    const { error } = await supabase.auth.verifyOtp({
+      email,
+      token,
+      type: 'recovery',
+    });
+    if (error) throw new Error(error.message);
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    ensureSupabaseConfigured();
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) throw new Error(error.message);
+  };
+
+  const resendSignupOtp = async (email: string) => {
+    ensureSupabaseConfigured();
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    });
+    if (error) throw new Error(error.message);
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -494,6 +604,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateProfile,
         setOperator,
         topUpWallet,
+        sendMoney,
         createCircle,
         joinCircleByCode,
         payCircleContribution,
@@ -503,6 +614,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markNotificationsAsRead,
         resetAppState,
         logout,
+        requestPasswordReset,
+        verifyPasswordResetOtp,
+        updatePassword,
+        resendSignupOtp,
         refreshData,
       }}
     >

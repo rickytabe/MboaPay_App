@@ -30,7 +30,7 @@ export async function initiateDeposit({
         },
       },
       clientReferenceId: referenceId,
-      customerMessage: note.substring(0, 22),
+      customerMessage: note.replace(/[^a-zA-Z0-9 ]/g, "").substring(0, 22),
       amount: String(amount),
       currency: CURRENCY,
     }),

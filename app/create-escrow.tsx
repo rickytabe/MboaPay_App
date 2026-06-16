@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
+import { StyleSheet, Text, View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Keyboard } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
 import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
@@ -18,6 +19,7 @@ export default function CreateEscrow() {
   const [loading, setLoading] = useState(false);
 
   const handleCreate = async () => {
+    Keyboard.dismiss();
     if (!title.trim()) {
       Alert.alert("Error", "Please enter a contract title");
       return;
@@ -67,7 +69,10 @@ export default function CreateEscrow() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.keyboardContainer}
     >
-      <ScrollView contentContainerStyle={styles.container}>
+      <ScrollView 
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.topSection}>
           <TopNavBarComponent showBack title="New Escrow" />
           

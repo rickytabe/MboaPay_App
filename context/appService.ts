@@ -82,6 +82,8 @@ const mapCircle = (circle: any, currentUserId: string): Circle => {
     status: circle.status,
     code: circle.invite_code,
     isTreasurer: me?.role === "admin",
+    isMember: !!me,
+    visibility: circle.visibility || 'private',
     members: mappedMembers,
   };
 };
@@ -146,6 +148,20 @@ export const subscribeToAppData = (currentUserId: string, fetchAppData: (userId:
     })
     .subscribe();
 
+  const circlesChannel = supabase
+    .channel('circles-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'circles' }, () => {
+      void fetchAppData(currentUserId);
+    })
+    .subscribe();
+
+  const circleMembersChannel = supabase
+    .channel('circle_members-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'circle_members' }, () => {
+      void fetchAppData(currentUserId);
+    })
+    .subscribe();
+
   const escrowsChannel = supabase
     .channel('escrows-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'escrows' }, () => {
@@ -163,6 +179,8 @@ export const subscribeToAppData = (currentUserId: string, fetchAppData: (userId:
   return () => {
     void supabase.removeChannel(transactionsChannel);
     void supabase.removeChannel(contributionsChannel);
+    void supabase.removeChannel(circlesChannel);
+    void supabase.removeChannel(circleMembersChannel);
     void supabase.removeChannel(escrowsChannel);
     void supabase.removeChannel(walletsChannel);
   };

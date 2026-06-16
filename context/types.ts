@@ -42,6 +42,8 @@ export interface Circle {
   status: string;
   code: string;
   isTreasurer: boolean;
+  isMember: boolean;
+  visibility: 'public' | 'private';
   members: CircleMember[];
 }
 
@@ -79,14 +81,14 @@ export interface AppContextType {
   notifications: AppNotification[];
   pendingEmail: string;
   login: (phone: string) => Promise<void>;
-  loginWithEmail: (email: string, pass: string) => Promise<void>;
+  loginWithEmail: (email: string, pass: string) => Promise<{ needsProfileSetup: boolean }>;
   registerWithEmail: (email: string, pass: string, fullName: string, phone: string, mnoProvider?: string) => Promise<{ pendingEmail: string }>;
-  verifyOtp: (email: string, token: string) => Promise<void>;
+  verifyOtp: (email: string, token: string) => Promise<{ needsProfileSetup: boolean }>;
   updateProfile: (name: string, email: string, avatarUrl?: string, phone?: string) => Promise<void>;
   setOperator: (op: "MTN" | "Orange") => void;
   topUpWallet: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
   sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;
-  createCircle: (name: string, type: "Tontine" | "Goal", goal: number, contribution: number, frequency: "Weekly" | "Monthly", maxMembers: number) => Promise<{ id: string; name: string; code: string }>;
+  createCircle: (name: string, type: "solo" | "pool" | "rotation", goal: number, contribution: number, frequency: "daily" | "weekly" | "monthly", maxMembers: number, visibility: 'public' | 'private') => Promise<{ id: string; name: string; code: string }>;
   joinCircleByCode: (code: string) => Promise<{ success: boolean; message: string }>;
   payCircleContribution: (circleId: string) => Promise<void>;
   createEscrowContract: (title: string, desc: string, amount: number, otherParty: string, role: "buyer" | "seller") => Promise<void>;
@@ -95,5 +97,9 @@ export interface AppContextType {
   markNotificationsAsRead: () => Promise<void>;
   resetAppState: () => void;
   logout: () => Promise<void>;
+  requestPasswordReset: (email: string) => Promise<void>;
+  verifyPasswordResetOtp: (email: string, token: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
+  resendSignupOtp: (email: string) => Promise<void>;
   refreshData: () => Promise<void>;
 }

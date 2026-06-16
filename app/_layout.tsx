@@ -7,7 +7,7 @@ import { ToastProvider, useToast } from "../context/ToastContext";
 import { useApp } from "../context/AppContext";
 import AppErrorBoundary from "../components/AppErrorBoundary";
 
-const PUBLIC_ROUTES = new Set(["", "register", "otp"]);
+const PUBLIC_ROUTES = new Set(["", "login", "register", "otp", "forgot-password", "reset-otp", "set-new-password"]);
 
 function AppShell() {
   const router = useRouter();

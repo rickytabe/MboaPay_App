@@ -102,6 +102,12 @@ export default function Login() {
               />
             </TouchableOpacity>
           </View>
+          <TouchableOpacity 
+            style={styles.forgotPasswordButton} 
+            onPress={() => router.push('/forgot-password')}
+          >
+            <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+          </TouchableOpacity>
         </View>
 
         {error ? (
@@ -211,5 +217,18 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 10,
   },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: "600" },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+  },
+  forgotPasswordText: {
+    color: COLORS.primaryContainer,
+    fontSize: 13,
+    fontWeight: "700",
+  },
 });
