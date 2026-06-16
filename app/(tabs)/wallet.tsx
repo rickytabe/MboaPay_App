@@ -1,13 +1,13 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useApp, Transaction } from "../../context/AppContext";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
-import TopNavBarComponent from "../../components/TopNavBarComponent";
-import MNOToggle from "../../components/MNOToggle";
-import Card from "../../components/Card";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Button from "../../components/Button";
+import Card from "../../components/Card";
+import TopNavBarComponent from "../../components/TopNavBarComponent";
+import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
+import { useApp } from "../../context/AppContext";
+import type { Transaction } from "../../context/types";
 
 export default function Wallet() {
   const router = useRouter();
@@ -75,10 +75,15 @@ export default function Wallet() {
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
       <TopNavBarComponent title="Wallet Dashboard" />
 
-      {/* Operator Settings */}
+      {/* Operator Settings (auto-detected) */}
       <View style={styles.mnoSection}>
         <Text style={styles.mnoLabel}>Active Mobile Wallet</Text>
-        <MNOToggle selected={selectedOperator} onChange={setOperator} />
+        <View style={styles.mnoRow}>
+          <Text style={styles.detectedText}>{selectedOperator === 'MTN' ? 'MTN Mobile Money' : 'Orange Money'}</Text>
+          <TouchableOpacity onPress={() => router.push('/profile')}>
+            <Text style={styles.changeLink}>Change</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Dynamic Account Card */}
@@ -89,7 +94,7 @@ export default function Wallet() {
           selectedOperator === "MTN"
             ? { borderLeftWidth: 6, borderLeftColor: COLORS.mtn }
             : { borderLeftWidth: 6, borderLeftColor: COLORS.orange },
-        ]}
+        ] as any}
       >
         <View style={styles.walletDetails}>
           <View>
@@ -175,6 +180,20 @@ const styles = StyleSheet.create({
     marginTop: 16,
     marginBottom: 20,
     gap: 8,
+  },
+  mnoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  detectedText: {
+    fontSize: 14,
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "600",
+  },
+  changeLink: {
+    color: COLORS.primary,
+    fontWeight: "700",
   },
   mnoLabel: {
     fontSize: 13,

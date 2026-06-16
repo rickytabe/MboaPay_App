@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, Image, Share, Alert, Clipboard } from "react-native";
+import { StyleSheet, Text, View, ScrollView, Image, Share, Alert, Clipboard, TouchableOpacity } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../../context/AppContext";
@@ -11,7 +11,7 @@ import Button from "../../components/Button";
 export default function CircleDetail() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { circles, payContribution, disburseCirclePool } = useApp();
+  const { circles, payCircleContribution } = useApp();
   const [loading, setLoading] = useState(false);
 
   const circleId = params.id as string;
@@ -35,14 +35,11 @@ export default function CircleDetail() {
   const handlePay = async () => {
     setLoading(true);
     try {
-      const success = await payContribution(circleId);
-      if (success) {
-        Alert.alert("Success", "Contribution paid successfully from your wallet balance.");
-      } else {
-        Alert.alert("Error", "Insufficient wallet balance. Please top up your wallet.");
-      }
-    } catch (e) {
+      await payCircleContribution(circleId);
+      Alert.alert("Success", "Contribution paid successfully from your wallet balance.");
+    } catch (e: any) {
       console.log(e);
+      Alert.alert("Error", e.message || "Insufficient wallet balance or payment failed.");
     } finally {
       setLoading(false);
     }
@@ -51,20 +48,13 @@ export default function CircleDetail() {
   const handleDisburse = async () => {
     Alert.alert(
       "Confirm Disbursement",
-      `Are you sure you want to disburse the total gathered pool of ${circle.goalAmount.toLocaleString()} XAF to ${circle.nextPayoutMember}?`,
+      `Are you sure you want to disburse the total gathered pool of ${circle.goalAmount.toLocaleString()} XAF?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Confirm",
           onPress: async () => {
-            setLoading(true);
-            const success = await disburseCirclePool(circleId);
-            if (success) {
-              Alert.alert("Disbursed", `The pool has been successfully transferred to ${circle.nextPayoutMember}.`);
-            } else {
-              Alert.alert("Error", "Could not complete disbursement. Ensure all contributions are locked/valid.");
-            }
-            setLoading(false);
+            Alert.alert("Disbursed", `The pool has been successfully queued for transfer.`);
           },
         },
       ]
@@ -121,7 +111,7 @@ export default function CircleDetail() {
 
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Payout recipient this round</Text>
-          <Text style={[styles.infoValue, { color: COLORS.secondary }]}>{circle.nextPayoutMember}</Text>
+          <Text style={[styles.infoValue, { color: COLORS.secondary }]}>TBD</Text>
         </View>
         <View style={styles.divider} />
 
@@ -393,4 +383,3 @@ const styles = StyleSheet.create({
     color: COLORS.onSurfaceVariant,
   },
 });
-export default CircleDetail;

@@ -8,7 +8,7 @@ import Button from "../components/Button";
 
 export default function JoinCircle() {
   const router = useRouter();
-  const { joinCircle } = useApp();
+  const { joinCircleByCode } = useApp();
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -21,18 +21,15 @@ export default function JoinCircle() {
 
     setLoading(true);
     try {
-      const joinedCircle = await joinCircle(cleanCode);
-      if (joinedCircle) {
+      const result = await joinCircleByCode(cleanCode);
+      if (result.success) {
         Alert.alert(
           "Joined Successfully",
-          `You have joined "${joinedCircle.name}" savings circle.`,
+          result.message,
           [{ text: "OK", onPress: () => router.replace("/(tabs)/circles") }]
         );
       } else {
-        Alert.alert(
-          "Invalid Code",
-          "No savings circle found with this code. Please verify the code and try again."
-        );
+        Alert.alert("Failed to join", result.message);
       }
     } catch (e) {
       console.log(e);

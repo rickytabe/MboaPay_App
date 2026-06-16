@@ -41,18 +41,17 @@ export default function CreateEscrow() {
       const buyerName = role === "buyer" ? "You" : counterparty.trim();
       const sellerName = role === "seller" ? "You" : counterparty.trim();
 
-      const newEscrow = await createEscrowContract(
+      await createEscrowContract(
         title.trim(),
         description.trim(),
         amountNum,
-        role,
-        buyerName,
-        sellerName
+        counterparty.trim(),
+        role
       );
 
       Alert.alert(
         "Escrow Created",
-        `Protection agreement "${newEscrow.title}" has been created. Invite code: ${newEscrow.code}`,
+        `Protection agreement "${title.trim()}" has been created.`,
         [{ text: "OK", onPress: () => router.replace("/(tabs)/escrow") }]
       );
     } catch (e) {

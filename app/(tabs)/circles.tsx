@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useApp, Circle } from "../../context/AppContext";
+import { useApp } from "../../context/AppContext";
+import type { Circle } from "../../context/types";
 import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
 import Card from "../../components/Card";
@@ -444,4 +445,3 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
-export default Circles;

@@ -1,0 +1,16 @@
+export const PAWAPAY_BASE_URL = "https://api.sandbox.pawapay.io";
+export const PAWAPAY_TOKEN = process.env.EXPO_PUBLIC_PAWAPAY_TOKEN || "";
+
+export const PROVIDER_CODES = {
+  MTN: "MTN_MOMO_CMR",
+  ORANGE: "ORANGE_CMR",
+} as const;
+
+export const CURRENCY = "XAF";
+
+export const DEMO_NUMBERS = {
+  MTN_DEPOSIT_SUCCESS: "237653456789",
+  MTN_PAYOUT_SUCCESS: "237653456789",
+  ORANGE_DEPOSIT_SUCCESS: "237693456789",
+  ORANGE_PAYOUT_SUCCESS: "237693456789",
+};

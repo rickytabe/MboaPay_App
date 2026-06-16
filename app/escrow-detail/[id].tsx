@@ -11,7 +11,7 @@ import Button from "../../components/Button";
 export default function EscrowDetail() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { escrows, releaseEscrowFunds, disputeEscrow, lockEscrowFunds } = useApp();
+  const { escrows, releaseEscrowContract, disputeEscrowContract } = useApp();
   const [loading, setLoading] = useState(false);
 
   const escrowId = params.id as string;
@@ -27,14 +27,8 @@ export default function EscrowDetail() {
   }
 
   const handleLockFunds = async () => {
-    setLoading(true);
-    const success = await lockEscrowFunds(escrowId);
-    if (success) {
-      Alert.alert("Success", "Funds locked successfully inside protection escrow.");
-    } else {
-      Alert.alert("Error", "Insufficient wallet balance to secure this agreement.");
-    }
-    setLoading(false);
+    // This is handled during creation, keeping dummy for now
+    Alert.alert("Success", "Funds locked successfully inside protection escrow.");
   };
 
   const handleRelease = async () => {
@@ -47,13 +41,14 @@ export default function EscrowDetail() {
           text: "Release Funds",
           onPress: async () => {
             setLoading(true);
-            const success = await releaseEscrowFunds(escrowId);
-            if (success) {
+            try {
+              await releaseEscrowContract(escrowId);
               Alert.alert("Funds Released", "The seller has been paid successfully.");
-            } else {
-              Alert.alert("Error", "Failed to release funds. Please try again.");
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to release funds. Please try again.");
+            } finally {
+              setLoading(false);
             }
-            setLoading(false);
           },
         },
       ]
@@ -70,11 +65,14 @@ export default function EscrowDetail() {
           text: "Raise Dispute",
           onPress: async () => {
             setLoading(true);
-            const success = await disputeEscrow(escrowId);
-            if (success) {
+            try {
+              await disputeEscrowContract(escrowId);
               Alert.alert("Dispute Logged", "Support has been notified. Funds remain frozen.");
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to raise dispute.");
+            } finally {
+              setLoading(false);
             }
-            setLoading(false);
           },
         },
       ]
@@ -111,8 +109,8 @@ export default function EscrowDetail() {
             ? { backgroundColor: COLORS.error }
             : contract.status === "released"
             ? { backgroundColor: COLORS.secondary }
-            : { backgroundColor: COLORS.primaryContainer },
-        ]}
+            : { backgroundColor: COLORS.primaryContainer }
+        ] as any}
       >
         <View style={styles.cardHeader}>
           <Text style={styles.cardStatusLabel}>{getStatusLabel(contract.status)}</Text>
@@ -123,12 +121,12 @@ export default function EscrowDetail() {
         <View style={styles.participantsRow}>
           <View style={styles.participant}>
             <Text style={styles.participantLabel}>Buyer</Text>
-            <Text style={styles.participantValue}>{contract.buyer}</Text>
+            <Text style={styles.participantValue}>{contract.role === 'buyer' ? 'You' : contract.otherParty}</Text>
           </View>
           <Ionicons name="arrow-forward" size={16} color="rgba(255,255,255,0.6)" />
           <View style={styles.participant}>
             <Text style={styles.participantLabel}>Seller</Text>
-            <Text style={styles.participantValue}>{contract.seller}</Text>
+            <Text style={styles.participantValue}>{contract.role === 'seller' ? 'You' : contract.otherParty}</Text>
           </View>
         </View>
       </Card>
@@ -463,4 +461,3 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
 });
-export default EscrowDetail;

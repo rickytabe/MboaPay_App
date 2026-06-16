@@ -8,9 +8,14 @@ import { COLORS, TYPOGRAPHY } from "../constants/Theme";
 interface TopNavProps {
   title?: string;
   showBack?: boolean;
+  showNotifications?: boolean;
 }
 
-export const TopNavBarComponent = ({ title = "MboaPay", showBack = false }: TopNavProps) => {
+export const TopNavBarComponent = ({
+  title = "MboaPay",
+  showBack = false,
+  showNotifications = true,
+}: TopNavProps) => {
   const router = useRouter();
   const { user, notifications } = useApp();
 
@@ -43,17 +48,19 @@ export const TopNavBarComponent = ({ title = "MboaPay", showBack = false }: TopN
         </Text>
       </View>
 
-      <TouchableOpacity
-        style={styles.notificationButton}
-        onPress={() => router.push("/notifications")}
-      >
-        <Ionicons name="notifications-outline" size={24} color={COLORS.primary} />
-        {unreadCount > 0 && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{unreadCount}</Text>
-          </View>
-        )}
-      </TouchableOpacity>
+      {showNotifications && (
+        <TouchableOpacity
+          style={styles.notificationButton}
+          onPress={() => router.push("/notifications")}
+        >
+          <Ionicons name="notifications-outline" size={24} color={COLORS.primary} />
+          {unreadCount > 0 && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>{unreadCount}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
     </View>
   );
 };

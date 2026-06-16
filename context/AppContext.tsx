@@ -1,95 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
+import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { loadAppData, syncProfileFromSession as syncProfileFromSessionHelper, subscribeToAppData } from "./appService";
+import { Session } from "@supabase/supabase-js";
+import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
+import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
+import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
+import { PROVIDER_CODES } from "../lib/pawapay/constants";
 
-export interface UserProfile {
-  name: string;
-  phone: string;
-  email: string;
-  avatarUrl: string;
-  isLoggedIn: boolean;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'deposit' | 'withdrawal' | 'send' | 'receive' | 'escrow_lock' | 'escrow_release' | 'tontine_payout' | 'tontine_pay';
-  amount: number;
-  title: string;
-  subtitle: string;
-  date: string;
-  operator?: 'MTN' | 'Orange';
-  status: 'success' | 'pending' | 'failed';
-}
-
-export interface CircleMember {
-  name: string;
-  paid: boolean;
-  isPayout: boolean;
-  avatar: string;
-}
-
-export interface Circle {
-  id: string;
-  name: string;
-  type: 'Tontine' | 'Goal';
-  goalAmount: number;
-  contributionAmount: number;
-  frequency: 'Weekly' | 'Monthly';
-  nextPayoutDate: string;
-  membersCount: number;
-  currentRound: number;
-  maxMembers: number;
-  status: 'active' | 'completed';
-  code: string;
-  isTreasurer: boolean;
-  members: CircleMember[];
-}
-
-export interface Escrow {
-  id: string;
-  title: string;
-  description: string;
-  role: 'buyer' | 'seller';
-  amount: number;
-  otherParty: string;
-  status: 'pending_payment' | 'locked' | 'disputed' | 'released';
-  date: string;
-  code: string;
-}
-
-export interface AppNotification {
-  id: string;
-  title: string;
-  body: string;
-  date: string;
-  read: boolean;
-}
-
-interface AppContextType {
-  user: UserProfile;
-  walletBalance: number;
-  selectedOperator: 'MTN' | 'Orange';
-  transactions: Transaction[];
-  circles: Circle[];
-  escrows: Escrow[];
-  notifications: AppNotification[];
-  login: (phone: string) => void;
-  verifyOtp: () => void;
-  updateProfile: (name: string, email: string) => void;
-  setOperator: (op: 'MTN' | 'Orange') => void;
-  topUpWallet: (amount: number, operator: 'MTN' | 'Orange') => Promise<string>;
-  createCircle: (name: string, type: 'Tontine' | 'Goal', goal: number, contribution: number, frequency: 'Weekly' | 'Monthly', maxMembers: number) => string;
-  joinCircleByCode: (code: string) => { success: boolean; message: string };
-  payCircleContribution: (circleId: string) => void;
-  createEscrowContract: (title: string, desc: string, amount: number, otherParty: string, role: 'buyer' | 'seller') => void;
-  releaseEscrowContract: (escrowId: string) => void;
-  disputeEscrowContract: (escrowId: string) => void;
-  markNotificationsAsRead: () => void;
-  resetAppState: () => void;
-  logout: () => void;
-}
+const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const INITIAL_USER: UserProfile = {
+  id: "",
   name: "",
   phone: "",
   email: "",
@@ -97,523 +22,472 @@ const INITIAL_USER: UserProfile = {
   isLoggedIn: false,
 };
 
-const INITIAL_TRANSACTIONS: Transaction[] = [
-  {
-    id: "tx-001",
-    type: "deposit",
-    amount: 15000,
-    title: "Mobile Money Deposit",
-    subtitle: "Deposited from MTN Wallet",
-    date: "14 Jun, 10:30 AM",
-    operator: "MTN",
-    status: "success",
-  },
-  {
-    id: "tx-002",
-    type: "tontine_pay",
-    amount: 5000,
-    title: "Tontine Contribution",
-    subtitle: "Paid to Njangi Family Circle",
-    date: "12 Jun, 06:15 PM",
-    status: "success",
-  },
-  {
-    id: "tx-003",
-    type: "send",
-    amount: 2500,
-    title: "Funds Transfer",
-    subtitle: "Sent to Frankline",
-    date: "10 Jun, 02:45 PM",
-    status: "success",
-  },
-];
-
-const INITIAL_CIRCLES: Circle[] = [
-  {
-    id: "circle-001",
-    name: "Njangi Family Circle",
-    type: "Tontine",
-    goalAmount: 60000,
-    contributionAmount: 5000,
-    frequency: "Weekly",
-    nextPayoutDate: "In 2 days (17 Jun)",
-    membersCount: 12,
-    currentRound: 4,
-    maxMembers: 12,
-    status: "active",
-    code: "MBOA-4982",
-    isTreasurer: false,
-    members: [
-      { name: "John Doe", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=12" },
-      { name: "You (Pending)", paid: false, isPayout: false, avatar: "https://i.pravatar.cc/150?img=11" },
-      { name: "Amadou Toure", paid: true, isPayout: true, avatar: "https://i.pravatar.cc/150?img=13" },
-      { name: "Saliou Diallo", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=14" },
-      { name: "Clarisse E.", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=15" },
-    ],
-  },
-  {
-    id: "circle-002",
-    name: "Douala Market Group",
-    type: "Goal",
-    goalAmount: 250000,
-    contributionAmount: 15000,
-    frequency: "Monthly",
-    nextPayoutDate: "In 15 days (30 Jun)",
-    membersCount: 8,
-    currentRound: 1,
-    maxMembers: 10,
-    status: "active",
-    code: "MBOA-7719",
-    isTreasurer: true,
-    members: [
-      { name: "You", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=11" },
-      { name: "Alain N.", paid: true, isPayout: true, avatar: "https://i.pravatar.cc/150?img=21" },
-      { name: "Beatrice K.", paid: false, isPayout: false, avatar: "https://i.pravatar.cc/150?img=22" },
-      { name: "Dieudonne M.", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=23" },
-    ],
-  },
-];
-
-const INITIAL_ESCROWS: Escrow[] = [
-  {
-    id: "escrow-001",
-    title: "MacBook Air purchase",
-    description: "Purchase of a MacBook Air M1, 8GB, 256GB SSD in pristine condition.",
-    role: "buyer",
-    amount: 350000,
-    otherParty: "Sani Electronics (+237 677 889 900)",
-    status: "locked",
-    date: "14 Jun, 09:12 AM",
-    code: "ESC-8921",
-  },
-  {
-    id: "escrow-002",
-    title: "Logo Design Service",
-    description: "Creating a premium corporate identity logo and branding guide.",
-    role: "seller",
-    amount: 50000,
-    otherParty: "Kamga Retail (+237 699 112 233)",
-    status: "pending_payment",
-    date: "15 Jun, 11:00 AM",
-    code: "ESC-3051",
-  },
-];
-
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: "not-001",
-    title: "Njangi Round Completed",
-    body: "Round 3 of Njangi Family Circle has been paid out to Amadou Toure.",
-    date: "12 Jun, 06:30 PM",
-    read: false,
-  },
-  {
-    id: "not-002",
-    title: "Top-up Successful",
-    body: "Successfully loaded 15,000 XAF via MTN Mobile Money.",
-    date: "14 Jun, 10:31 AM",
-    read: true,
-  },
-];
-
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
-  const [walletBalance, setWalletBalance] = useState<number>(35200);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [pendingEmail, setPendingEmail] = useState("");
+  
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [selectedOperator, setSelectedOperator] = useState<'MTN' | 'Orange'>('MTN');
-  const [transactions, setTransactions] = useState<Transaction[]>(INITIAL_TRANSACTIONS);
-  const [circles, setCircles] = useState<Circle[]>(INITIAL_CIRCLES);
-  const [escrows, setEscrows] = useState<Escrow[]>(INITIAL_ESCROWS);
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [circles, setCircles] = useState<Circle[]>([]);
+  const [escrows, setEscrows] = useState<Escrow[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const login = (phone: string) => {
+  const fetchAppData = useCallback(async (currentUserId: string) => {
+    await loadAppData(currentUserId, setWalletBalance, setTransactions, setNotifications, setCircles, setEscrows);
+  }, []);
+
+  const syncProfileFromSession = useCallback(async (session: Session | null) => {
+    return await syncProfileFromSessionHelper(session, setAuthSession, setUser, fetchAppData, INITIAL_USER);
+  }, [fetchAppData]);
+
+  const refreshData = async () => {
+    if (user.id) {
+      await fetchAppData(user.id);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const hydrateSession = async () => {
+      if (supabaseConfigError) {
+        console.warn(supabaseConfigError);
+        if (isMounted) setIsAuthLoading(false);
+        return;
+      }
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (isMounted) {
+        await syncProfileFromSession(session);
+        setIsAuthLoading(false);
+      }
+    };
+
+    void hydrateSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (isMounted) {
+        void syncProfileFromSession(session);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [syncProfileFromSession]);
+
+  // Realtime subscriptions for live dashboard
+  useEffect(() => {
+    if (user.id && user.isLoggedIn) {
+      const unsubscribe = subscribeToAppData(user.id, fetchAppData);
+      return () => unsubscribe();
+    }
+  }, [user.id, user.isLoggedIn, fetchAppData]);
+
+  // Load persisted operator or auto-detect when user changes
+  useEffect(() => {
+    let mounted = true;
+    const loadOperatorPref = async () => {
+      try {
+        const stored = await AsyncStorage.getItem("mboa_mno_override");
+        if (mounted && stored && (stored === 'MTN' || stored === 'Orange')) {
+          setSelectedOperator(stored as 'MTN' | 'Orange');
+          return;
+        }
+
+        if (mounted) {
+          const detected = await autoDetectMNO(user.phone);
+          setSelectedOperator(detected);
+        }
+      } catch (e) {
+        console.warn("Error loading MNO preference", e);
+      }
+    };
+
+    void loadOperatorPref();
+
+    return () => { mounted = false; };
+  }, [user.phone]);
+
+  const login = async (phone: string) => {
+    ensureSupabaseConfigured();
     setUser((prev) => ({ ...prev, phone }));
+    const { error } = await supabase.auth.signInWithOtp({ phone });
+    if (error) throw new Error(error.message);
   };
 
-  const verifyOtp = () => {
-    // Advances status
+  const loginWithEmail = async (email: string, password: string) => {
+    ensureSupabaseConfigured();
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+    await syncProfileFromSession(data.session);
   };
 
-  const updateProfile = (name: string, email: string) => {
-    setUser((prev) => ({
-      ...prev,
-      name,
+  const registerWithEmail = async (email: string, password: string, fullName: string, phone: string, mnoProvider?: string) => {
+    ensureSupabaseConfigured();
+    setUser((prev) => ({ ...prev, phone, email, name: fullName }));
+    if (mnoProvider) setSelectedOperator(mnoProvider as 'MTN' | 'Orange');
+    const { data, error } = await supabase.auth.signUp({
       email,
-      isLoggedIn: true,
+      password,
+      options: {
+        data: { full_name: fullName, phone, mno_provider: mnoProvider || null }
+      }
+    });
+    
+    if (error) {
+      console.error("SUPABASE SIGNUP ERROR:", error);
+      throw new Error(error.message);
+    }
+    
+    // Store the email so the OTP screen can use it
+    setPendingEmail(email);
+    
+    // Don't sync session yet — user must verify OTP first
+    return { pendingEmail: email };
+  };
+
+  const verifyOtp = async (email: string, token: string) => {
+    ensureSupabaseConfigured();
+    if (!email) throw new Error("Email is missing. Please go back and register again.");
+    const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "signup" });
+    if (error) throw new Error(error.message);
+    await syncProfileFromSession(data.session);
+  };
+
+  const updateProfile = async (name: string, email: string, avatarUrl?: string, phone?: string) => {
+    ensureSupabaseConfigured();
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentSession = authSession || session;
+
+    if (!currentSession?.user.id) throw new Error("Your session expired. Please sign in again.");
+
+    // Build the update object dynamically so we can include phone if provided
+    const updateFields: Record<string, any> = { full_name: trimmedName };
+    if (phone) updateFields.phone = phone;
+
+    const { data: updatedProfile, error: profileError } = await supabase
+      .from("users")
+      .update(updateFields)
+      .eq("id", currentSession.user.id)
+      .select("id")
+      .maybeSingle();
+
+    if (profileError) throw new Error(profileError.message);
+    if (!updatedProfile) throw new Error("Profile row not found. Run auth_trigger.sql in Supabase, then try again.");
+
+    const { error: metadataError } = await supabase.auth.updateUser({
+      data: { full_name: trimmedName, email: trimmedEmail || null, avatar_url: avatarUrl || null, phone: phone || null },
+    });
+
+    if (metadataError) throw new Error(metadataError.message);
+
+    setUser((prev) => ({
+      ...prev, id: currentSession.user.id, name: trimmedName, email: trimmedEmail,
+      phone: phone || prev.phone, avatarUrl: avatarUrl || prev.avatarUrl, isLoggedIn: true,
     }));
+    await fetchAppData(currentSession.user.id);
   };
 
   const setOperator = (op: 'MTN' | 'Orange') => {
     setSelectedOperator(op);
+    try {
+      AsyncStorage.setItem("mboa_mno_override", op);
+    } catch (e) {
+      console.warn("Could not persist MNO override", e);
+    }
   };
 
-  const topUpWallet = (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
-    return new Promise((resolve) => {
-      setTimeout(() => {
-        const txId = `tx-${Math.floor(100 + Math.random() * 900)}`;
-        const dateStr = new Date().toLocaleDateString("en-GB", {
-          day: "numeric",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        }).replace(",", "");
+  const autoDetectMNO = async (phone?: string | null): Promise<'MTN' | 'Orange'> => {
+    try {
+      const stored = await AsyncStorage.getItem("mboa_mno_override");
+      if (stored === 'MTN' || stored === 'Orange') return stored as 'MTN' | 'Orange';
+    } catch (e) {
+      // ignore
+    }
 
-        const newTx: Transaction = {
-          id: txId,
-          type: "deposit",
-          amount,
-          title: "Mobile Money Deposit",
-          subtitle: `Deposited from ${operator} Wallet`,
-          date: dateStr,
-          operator,
-          status: "success",
-        };
-
-        setWalletBalance((prev) => prev + amount);
-        setTransactions((prev) => [newTx, ...prev]);
-        setNotifications((prev) => [
-          {
-            id: `not-${Math.random().toString(36).substr(2, 9)}`,
-            title: "Deposit Successful",
-            body: `You have successfully loaded ${amount.toLocaleString()} XAF using ${operator} Money.`,
-            date: "Just now",
-            read: false,
+    if (phone && phone.length >= 9) {
+      try {
+        const token = process.env.EXPO_PUBLIC_PAWAPAY_TOKEN;
+        const cleanPhone = phone.replace(/[^0-9]/g, "");
+        // strip local 237 if they entered it so we only append once
+        const basePhone = cleanPhone.startsWith("237") ? cleanPhone.slice(3) : cleanPhone;
+        const fullPhone = `+237${basePhone}`;
+        
+        const resp = await fetch("https://api.sandbox.pawapay.io/v2/predict-provider", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
-          ...prev,
-        ]);
-        resolve(txId);
-      }, 2000); // Simulated delay for USSD approval
+          body: JSON.stringify({ phoneNumber: fullPhone }),
+        });
+        if (resp.ok) {
+          const body = await resp.json();
+          const prov = (body?.provider || "").toString().toUpperCase();
+          if (prov.includes("MTN")) return "MTN";
+          if (prov.includes("ORANGE")) return "Orange";
+        }
+      } catch (e) {
+        console.warn("MNO prediction failed", e);
+      }
+    }
+    return 'MTN';
+  };
+
+  const topUpWallet = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
+    const depositId = generateId();
+    const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+    // 1. Insert a pending transaction first to be safe
+    const { error: txError } = await supabase.from('transactions').insert({
+      id: depositId,
+      user_id: user.id,
+      amount,
+      type: 'top_up',
+      status: 'pending',
+      mno_provider: operator
     });
-  };
+    if (txError) throw new Error(txError.message);
 
-  const createCircle = (
-    name: string,
-    type: 'Tontine' | 'Goal',
-    goal: number,
-    contribution: number,
-    frequency: 'Weekly' | 'Monthly',
-    maxMembers: number
-  ): string => {
-    const id = `circle-${Math.floor(100 + Math.random() * 900)}`;
-    const code = `MBOA-${Math.floor(1000 + Math.random() * 9000)}`;
-    const newCircle: Circle = {
-      id,
-      name,
-      type,
-      goalAmount: goal,
-      contributionAmount: contribution,
-      frequency,
-      nextPayoutDate: frequency === "Weekly" ? "In 7 days" : "In 30 days",
-      membersCount: 1,
-      currentRound: 1,
-      maxMembers,
-      status: "active",
-      code,
-      isTreasurer: true,
-      members: [
-        { name: user.name || "You", paid: true, isPayout: false, avatar: user.avatarUrl },
-      ],
-    };
+    // 2. Initiate deposit
+    await initiateDeposit({
+      depositId,
+      phoneNumber: user.phone,
+      provider,
+      amount,
+      note: "Wallet Top-up",
+    });
 
-    setCircles((prev) => [...prev, newCircle]);
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Circle Created",
-        body: `Your savings circle "${name}" was created successfully! Share the code ${code} to invite members.`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
-
-    return id;
-  };
-
-  const joinCircleByCode = (code: string): { success: boolean; message: string } => {
-    // Normalize code comparison
-    const matchCode = code.trim().toUpperCase();
-    if (!matchCode.startsWith("MBOA-")) {
-      return { success: false, message: "Invalid invite code structure." };
-    }
-
-    // Check if user is already a member of a circle with this code
-    const alreadyJoined = circles.find((c) => c.code.toUpperCase() === matchCode);
-    if (alreadyJoined) {
-      return { success: false, message: "You are already a member of this circle." };
-    }
-
-    // Mock circle lookup & addition
-    const circleNames = ["Bafoussam Traders Njangi", "Yaounde Tech Savings", "West Region Community Goal"];
-    const randomName = circleNames[Math.floor(Math.random() * circleNames.length)];
-    const contribution = 10000;
+    // 3. Poll for completion
+    const finalStatus = await pollDepositUntilFinal(depositId);
     
-    const newCircle: Circle = {
-      id: `circle-${Math.floor(100 + Math.random() * 900)}`,
-      name: randomName,
-      type: "Tontine",
-      goalAmount: 100000,
-      contributionAmount: contribution,
-      frequency: "Weekly",
-      nextPayoutDate: "In 4 days",
-      membersCount: 6,
-      currentRound: 1,
-      maxMembers: 10,
-      status: "active",
-      code: matchCode,
-      isTreasurer: false,
-      members: [
-        { name: "Eric N.", paid: true, isPayout: true, avatar: "https://i.pravatar.cc/150?img=3" },
-        { name: "Felicite M.", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=4" },
-        { name: "Pascal T.", paid: true, isPayout: false, avatar: "https://i.pravatar.cc/150?img=5" },
-        { name: "You", paid: false, isPayout: false, avatar: user.avatarUrl },
-      ],
-    };
-
-    setCircles((prev) => [...prev, newCircle]);
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Joined Savings Circle",
-        body: `You joined "${randomName}" savings circle. Your first contribution is due soon.`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
-
-    return { success: true, message: `Successfully joined ${randomName}!` };
+    if (finalStatus.status === "COMPLETED") {
+      // 4. Update transaction status and wallet balance
+      await supabase.from('transactions').update({ status: 'successful' }).eq('id', depositId);
+      await supabase.rpc('increment_wallet_balance', { p_user_id: user.id, p_amount: amount });
+      await fetchAppData(user.id);
+      return depositId;
+    } else {
+      await supabase.from('transactions').update({ status: 'failed' }).eq('id', depositId);
+      throw new Error(`Deposit failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+    }
   };
 
-  const payCircleContribution = (circleId: string) => {
-    const circle = circles.find((c) => c.id === circleId);
+  const createCircle = async (
+    name: string, type: 'Tontine' | 'Goal', goal: number, contribution: number, frequency: 'Weekly' | 'Monthly', maxMembers: number
+  ): Promise<{ id: string, name: string, code: string }> => {
+    const { data, error } = await supabase.rpc('create_circle', {
+      p_name: name,
+      p_goal_type: type === 'Tontine' ? 'general' : 'specific',
+      p_circle_type: type.toLowerCase() === 'tontine' ? 'rotation' : 'saving',
+      p_target_amount: goal,
+      p_contribution_amount: contribution,
+      p_frequency: frequency.toLowerCase()
+    });
+    if (error) throw new Error(error.message);
+    await fetchAppData(user.id);
+    return { id: data?.id || "", name: data?.name || name, code: data?.invite_code || "" };
+  };
+
+  const joinCircleByCode = async (code: string): Promise<{ success: boolean; message: string }> => {
+    const { data, error } = await supabase.rpc('join_circle', { p_invite_code: code });
+    if (error) return { success: false, message: error.message };
+    await fetchAppData(user.id);
+    return { success: true, message: `Successfully joined ${data?.name || 'circle'}!` };
+  };
+
+  const payCircleContribution = async (circleId: string) => {
+    const circle = circles.find(c => c.id === circleId);
     if (!circle) return;
 
-    if (walletBalance < circle.contributionAmount) {
-      alert("Insufficient wallet balance. Please top up your wallet first.");
-      return;
-    }
+    const depositId = generateId();
+    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
 
-    setWalletBalance((prev) => prev - circle.contributionAmount);
-
-    // Update Circle Members state
-    setCircles((prev) =>
-      prev.map((c) => {
-        if (c.id === circleId) {
-          const updatedMembers = c.members.map((m) => {
-            if (m.name === "You" || m.name === "You (Pending)") {
-              return { ...m, name: "You", paid: true };
-            }
-            return m;
-          });
-          return { ...c, members: updatedMembers };
-        }
-        return c;
-      })
-    );
-
-    const dateStr = new Date().toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }).replace(",", "");
-
-    const newTx: Transaction = {
-      id: `tx-${Math.floor(100 + Math.random() * 900)}`,
-      type: "tontine_pay",
+    // 1. Insert pending contribution
+    const { error: insertError } = await supabase.from('contributions').insert({
+      circle_id: circleId,
+      user_id: user.id,
+      pawapay_deposit_id: depositId,
       amount: circle.contributionAmount,
-      title: "Tontine Contribution",
-      subtitle: `Paid to ${circle.name}`,
-      date: dateStr,
-      status: "success",
-    };
+      cycle_number: circle.currentRound,
+      status: 'PENDING',
+      due_at: new Date().toISOString()
+    });
+    if (insertError) throw new Error(insertError.message);
 
-    setTransactions((prev) => [newTx, ...prev]);
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Contribution Paid",
-        body: `Successfully contributed ${circle.contributionAmount.toLocaleString()} XAF to "${circle.name}".`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
-  };
+    // 2. Initiate deposit
+    await initiateDeposit({
+      depositId,
+      phoneNumber: user.phone,
+      provider,
+      amount: circle.contributionAmount,
+      note: `Circle ${circle.name} Contribution`
+    });
 
-  const createEscrowContract = (
-    title: string,
-    desc: string,
-    amount: number,
-    otherParty: string,
-    role: 'buyer' | 'seller'
-  ) => {
-    const id = `escrow-${Math.floor(100 + Math.random() * 900)}`;
-    const code = `ESC-${Math.floor(1000 + Math.random() * 9000)}`;
+    // 3. Poll for completion
+    const finalStatus = await pollDepositUntilFinal(depositId);
 
-    const dateStr = new Date().toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }).replace(",", "");
+    if (finalStatus.status === "COMPLETED") {
+      // 4. Update status
+      await supabase.from('contributions').update({ 
+        status: 'COMPLETED',
+        paid_at: new Date().toISOString()
+      }).eq('pawapay_deposit_id', depositId);
+      
+      // Update member deposit_status
+      await supabase.from('circle_members')
+        .update({ deposit_status: 'paid' })
+        .eq('circle_id', circleId)
+        .eq('user_id', user.id);
 
-    const newEscrow: Escrow = {
-      id,
-      title,
-      description: desc,
-      role,
-      amount,
-      otherParty,
-      status: role === "buyer" ? "locked" : "pending_payment",
-      date: dateStr,
-      code,
-    };
-
-    if (role === "buyer") {
-      if (walletBalance < amount) {
-        alert("Insufficient wallet balance to secure this escrow contract. Please top up.");
-        return;
-      }
-      setWalletBalance((prev) => prev - amount);
-
-      const newTx: Transaction = {
-        id: `tx-${Math.floor(100 + Math.random() * 900)}`,
-        type: "escrow_lock",
-        amount,
-        title: "Escrow Funds Locked",
-        subtitle: `Locked for contract: ${title}`,
-        date: dateStr,
-        status: "success",
-      };
-      setTransactions((prev) => [newTx, ...prev]);
-    }
-
-    setEscrows((prev) => [...prev, newEscrow]);
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Escrow Agreement Created",
-        body: `Escrow contract "${title}" has been successfully established. Code: ${code}.`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
-  };
-
-  const releaseEscrowContract = (escrowId: string) => {
-    const item = escrows.find((e) => e.id === escrowId);
-    if (!item) return;
-
-    setEscrows((prev) =>
-      prev.map((e) => {
-        if (e.id === escrowId) {
-          return { ...e, status: "released" };
-        }
-        return e;
-      })
-    );
-
-    const dateStr = new Date().toLocaleDateString("en-GB", {
-      day: "numeric",
-      month: "short",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    }).replace(",", "");
-
-    if (item.role === "seller") {
-      setWalletBalance((prev) => prev + item.amount);
-
-      const newTx: Transaction = {
-        id: `tx-${Math.floor(100 + Math.random() * 900)}`,
-        type: "receive",
-        amount: item.amount,
-        title: "Escrow Funds Received",
-        subtitle: `Released from contract: ${item.title}`,
-        date: dateStr,
-        status: "success",
-      };
-      setTransactions((prev) => [newTx, ...prev]);
+      await fetchAppData(user.id);
     } else {
-      // If we are buyer, we release it to the seller, so we don't get the balance back.
-      const newTx: Transaction = {
-        id: `tx-${Math.floor(100 + Math.random() * 900)}`,
-        type: "escrow_release",
-        amount: item.amount,
-        title: "Escrow Funds Released",
-        subtitle: `Released to seller for: ${item.title}`,
-        date: dateStr,
-        status: "success",
-      };
-      setTransactions((prev) => [newTx, ...prev]);
+      await supabase.from('contributions').update({ status: 'FAILED' }).eq('pawapay_deposit_id', depositId);
+      throw new Error(`Contribution failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
     }
-
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Escrow Funds Released",
-        body: `Funds for "${item.title}" have been successfully released.`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
   };
 
-  const disputeEscrowContract = (escrowId: string) => {
-    setEscrows((prev) =>
-      prev.map((e) => {
-        if (e.id === escrowId) {
-          return { ...e, status: "disputed" };
-        }
-        return e;
-      })
-    );
-    setNotifications((prev) => [
-      {
-        id: `not-${Math.random().toString(36).substr(2, 9)}`,
-        title: "Escrow Under Dispute",
-        body: `A dispute has been raised for the escrow contract. MboaPay support will arbitrate.`,
-        date: "Just now",
-        read: false,
-      },
-      ...prev,
-    ]);
+  const createEscrowContract = async (
+    title: string, desc: string, amount: number, otherParty: string, role: 'buyer' | 'seller'
+  ) => {
+    if (role === 'seller') {
+      throw new Error("Only buyers can currently initiate escrow contracts in this demo.");
+    }
+    const depositId = generateId();
+    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+    // 1. Initiate lock deposit
+    await initiateDeposit({
+      depositId,
+      phoneNumber: user.phone,
+      provider,
+      amount,
+      note: "Escrow Contract Lock"
+    });
+
+    // 2. Poll for completion
+    const finalStatus = await pollDepositUntilFinal(depositId);
+
+    if (finalStatus.status === "COMPLETED") {
+      // 3. Create escrow record
+      const { error: insertError } = await supabase.from('escrows').insert({
+        id: depositId,
+        sender_id: user.id,
+        recipient_phone: otherParty,
+        amount,
+        description: desc,
+        status: 'locked'
+      });
+      if (insertError) throw new Error(insertError.message);
+      await fetchAppData(user.id);
+    } else {
+      throw new Error(`Escrow lock failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+    }
   };
 
-  const markNotificationsAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  const releaseEscrowContract = async (escrowId: string) => {
+    const escrow = escrows.find(e => e.id === escrowId);
+    if (!escrow) throw new Error("Escrow not found");
+
+    const payoutId = generateId();
+    // Assuming recipient is on the same operator for simplicity, or we can use auto-detect
+    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+    // 1. Initiate Payout to seller
+    await initiatePayout({
+      payoutId,
+      phoneNumber: escrow.otherParty, // The recipient_phone
+      provider,
+      amount: escrow.amount,
+      note: "Escrow Release"
+    });
+
+    // 2. Poll for completion
+    const finalStatus = await pollPayoutUntilFinal(payoutId);
+
+    if (finalStatus.status === "COMPLETED") {
+      await supabase.from('escrows').update({ status: 'released' }).eq('id', escrowId);
+      await fetchAppData(user.id);
+    } else {
+      throw new Error(`Escrow release failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+    }
+  };
+
+  const disputeEscrowContract = async (escrowId: string) => {
+    const refundId = generateId();
+
+    // 1. Initiate Refund to original buyer
+    await initiateRefund({
+      refundId,
+      depositId: escrowId, // Assuming escrowId is the depositId
+    });
+
+    // 2. Poll for completion
+    const finalStatus = await pollRefundUntilFinal(refundId);
+
+    if (finalStatus.status === "COMPLETED") {
+      await supabase.from('escrows').update({ status: 'disputed' }).eq('id', escrowId);
+      await fetchAppData(user.id);
+    } else {
+      throw new Error(`Escrow refund failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+    }
+  };
+
+  const markNotificationsAsRead = async () => {
+    const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
+    if (unreadIds.length === 0) return;
+    const { error } = await supabase.rpc('mark_notifications_read', { p_notification_ids: unreadIds });
+    if (!error) {
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    }
   };
 
   const resetAppState = () => {
+    setAuthSession(null);
     setUser(INITIAL_USER);
-    setWalletBalance(35200);
-    setTransactions(INITIAL_TRANSACTIONS);
-    setCircles(INITIAL_CIRCLES);
-    setEscrows(INITIAL_ESCROWS);
-    setNotifications(INITIAL_NOTIFICATIONS);
+    setWalletBalance(0);
+    setTransactions([]);
+    setCircles([]);
+    setEscrows([]);
+    setNotifications([]);
   };
 
-  const logout = () => {
-    setUser((prev) => ({ ...prev, isLoggedIn: false }));
+  const logout = async () => {
+    ensureSupabaseConfigured();
+    const { error } = await supabase.auth.signOut();
+    if (error) throw new Error(error.message);
+    resetAppState();
   };
 
   return (
     <AppContext.Provider
       value={{
         user,
+        authSession,
+        hasAuthSession: Boolean(authSession),
+        isAuthLoading,
         walletBalance,
         selectedOperator,
         transactions,
         circles,
         escrows,
         notifications,
+        pendingEmail,
         login,
+        loginWithEmail,
+        registerWithEmail,
         verifyOtp,
         updateProfile,
         setOperator,
@@ -627,6 +501,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         markNotificationsAsRead,
         resetAppState,
         logout,
+        refreshData,
       }}
     >
       {children}
@@ -641,3 +516,5 @@ export const useApp = () => {
   }
   return context;
 };
+
+export type { UserProfile, Transaction, Circle, Escrow, AppNotification } from "./types";

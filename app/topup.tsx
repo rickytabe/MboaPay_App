@@ -1,12 +1,11 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, SafeAreaView } from "react-native";
 import { useRouter } from "expo-router";
-import { useApp } from "../context/AppContext";
-import { COLORS, TYPOGRAPHY, SPACING } from "../constants/Theme";
-import TopNavBarComponent from "../components/TopNavBarComponent";
-import MNOToggle from "../components/MNOToggle";
-import Numpad from "../components/Numpad";
+import React, { useState } from "react";
+import { SafeAreaView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Button from "../components/Button";
+import Numpad from "../components/Numpad";
+import TopNavBarComponent from "../components/TopNavBarComponent";
+import { COLORS, SPACING } from "../constants/Theme";
+import { useApp } from "../context/AppContext";
 
 export default function Topup() {
   const router = useRouter();
@@ -69,8 +68,13 @@ export default function Topup() {
       </View>
 
       <View style={styles.content}>
-        <Text style={styles.label}>Select Network Operator</Text>
-        <MNOToggle selected={selectedOperator} onChange={setOperator} />
+        <Text style={styles.label}>Network Operator</Text>
+        <View style={styles.detectedRow}>
+          <Text style={styles.detectedText}>Detected MNO: {selectedOperator}</Text>
+          <TouchableOpacity onPress={() => router.push('/profile')}>
+            <Text style={styles.changeLink}>Change</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.amountDisplay}>
           <Text style={styles.currency}>XAF</Text>
@@ -121,6 +125,23 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
     marginBottom: 8,
     alignSelf: "flex-start",
+  },
+  detectedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 6,
+  },
+  detectedText: {
+    fontSize: 14,
+    color: COLORS.onSurfaceVariant,
+    fontWeight: "600",
+  },
+  changeLink: {
+    color: COLORS.primary,
+    fontWeight: "700",
+    marginLeft: 8,
   },
   amountDisplay: {
     flexDirection: "row",

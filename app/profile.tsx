@@ -7,10 +7,24 @@ import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import Card from "../components/Card";
 import Button from "../components/Button";
+import { useToast } from "../context/ToastContext";
+import { getErrorMessage } from "../lib/errors";
 
 export default function Profile() {
   const router = useRouter();
   const { user, logout, selectedOperator } = useApp();
+  const toast = useToast();
+
+  const performLogout = async () => {
+    try {
+      await logout();
+      toast.success("Logged out", "Your session has been closed.");
+      router.replace("/");
+    } catch (err) {
+      const message = getErrorMessage(err, "Could not log out. Please try again.");
+      toast.error("Log out failed", message);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -22,8 +36,7 @@ export default function Profile() {
           text: "Log Out",
           style: "destructive",
           onPress: () => {
-            logout();
-            router.replace("/");
+            void performLogout();
           },
         },
       ]
@@ -32,7 +45,7 @@ export default function Profile() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <TopNavBarComponent showBack title="My Profile" />
+      <TopNavBarComponent title="My Profile" />
 
       {/* Profile Header Hero */}
       <View style={styles.heroSection}>
@@ -81,7 +94,7 @@ export default function Profile() {
       </Card>
 
       {/* Security Details */}
-      <Text style={styles.sectionTitle}>Security &amp; Legal</Text>
+      <Text style={styles.sectionTitle}>Security & Legal</Text>
       <Card variant="outlined" style={styles.infoCard}>
         <View style={styles.infoRow}>
           <View style={styles.rowLeft}>
@@ -216,4 +229,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-export default Profile;

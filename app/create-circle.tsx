@@ -42,7 +42,7 @@ export default function CreateCircle() {
 
     setLoading(true);
     try {
-      const newCircle = await createCircle(name.trim(), goalNum, contribNum, frequency, membersNum);
+      const newCircle = await createCircle(name.trim(), 'Tontine', goalNum, contribNum, frequency as 'Weekly'|'Monthly', membersNum);
       Alert.alert(
         "Circle Created",
         `"${newCircle.name}" has been created successfully. Use code "${newCircle.code}" to invite members.`,

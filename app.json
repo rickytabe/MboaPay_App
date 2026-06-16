@@ -38,6 +38,12 @@
             "backgroundColor": "#000000"
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow MboaPay to choose a photo for your profile picture."
+        }
       ]
     ],
     "experiments": {

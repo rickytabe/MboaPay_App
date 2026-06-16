@@ -1,210 +1,342 @@
 import React, { useState, useRef, useEffect } from "react";
-import { StyleSheet, Text, View, TextInput, KeyboardAvoidingView, Platform, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  Animated,
+  Keyboard,
+} from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useApp } from "../context/AppContext";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
-import Button from "../components/Button";
-import TopNavBarComponent from "../components/TopNavBarComponent";
+import { COLORS, SPACING } from "../constants/Theme";
+import { Ionicons } from "@expo/vector-icons";
+import { Button } from "../components/Button";
+import { useToast } from "../context/ToastContext";
+import { getErrorMessage } from "../lib/errors";
 
-export default function Otp() {
+const OTP_LENGTH = 6;
+
+export default function OtpVerification() {
   const router = useRouter();
-  const { user } = useApp();
-  const [code, setCode] = useState(["", "", "", ""]);
-  const [timer, setTimer] = useState(59);
-  const [error, setError] = useState("");
+  const params = useLocalSearchParams<{ email: string }>();
+  const { verifyOtp, pendingEmail } = useApp();
+  const toast = useToast();
 
-  const inputRefs = [
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-  ];
+  const email = params.email || pendingEmail;
+  const maskedEmail = email
+    ? `${email.charAt(0)}${"*".repeat(Math.max(0, email.indexOf("@") - 1))}${email.substring(email.indexOf("@"))}`
+    : "";
+
+  const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(""));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  const inputRefs = useRef<(TextInput | null)[]>([]);
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setTimer((prev) => (prev > 0 ? prev - 1 : 0));
-    }, 1000);
-    return () => clearInterval(interval);
+    Animated.timing(fadeIn, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+
+    // Auto-focus first input after a short delay
+    setTimeout(() => inputRefs.current[0]?.focus(), 400);
+  }, [fadeIn]);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener("keyboardDidShow", (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hideSub = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardHeight(0)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
   }, []);
 
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
+
   const handleChange = (text: string, index: number) => {
-    const cleaned = text.replace(/[^0-9]/g, "");
-    const newCode = [...code];
-    newCode[index] = cleaned;
-    setCode(newCode);
-
-    if (cleaned && index < 3) {
-      inputRefs[index + 1].current?.focus();
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
-      const newCode = [...code];
-      newCode[index - 1] = "";
-      setCode(newCode);
-      inputRefs[index - 1].current?.focus();
-    }
-  };
-
-  const handleVerify = () => {
-    const fullCode = code.join("");
-    if (fullCode.length < 4) {
-      setError("Please enter the complete 4-digit OTP");
+    if (text.length > 1) {
+      // Handle paste — spread pasted string across all boxes
+      const chars = text.replace(/[^0-9]/g, "").split("").slice(0, OTP_LENGTH);
+      const newOtp = [...otp];
+      chars.forEach((char, i) => {
+        if (index + i < OTP_LENGTH) newOtp[index + i] = char;
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + chars.length, OTP_LENGTH - 1);
+      inputRefs.current[nextIndex]?.focus();
+      setError("");
       return;
     }
-    // Hardcode simulated success OTP (e.g. 1234 or any 4 digit code)
-    setError("");
-    router.push("/profile-setup");
-  };
 
-  const handleResend = () => {
-    if (timer === 0) {
-      setTimer(59);
-      setCode(["", "", "", ""]);
-      setError("");
-      inputRefs[0].current?.focus();
+    const cleaned = text.replace(/[^0-9]/g, "");
+    const newOtp = [...otp];
+    newOtp[index] = cleaned;
+    setOtp(newOtp);
+    setError("");
+
+    if (cleaned && index < OTP_LENGTH - 1) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const isComplete = code.every((digit) => digit !== "");
+  const handleKeyPress = (key: string, index: number) => {
+    if (key === "Backspace" && !otp[index] && index > 0) {
+      const newOtp = [...otp];
+      newOtp[index - 1] = "";
+      setOtp(newOtp);
+      inputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const otpCode = otp.join("");
+  const isComplete = otpCode.length === OTP_LENGTH;
+
+  const handleVerify = async () => {
+    if (!isComplete) {
+      setError("Please enter the full 6-digit code.");
+      triggerShake();
+      return;
+    }
+    if (!email) {
+      setError("Email is missing. Please go back and register again.");
+      triggerShake();
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError("");
+
+      await verifyOtp(email, otpCode);
+
+      toast.success("Verified!", "Your account is now active.");
+      router.replace("/(tabs)/home");
+    } catch (err: any) {
+      console.error("OTP VERIFY ERROR:", err);
+      const message = getErrorMessage(err, "Verification failed. Please try again.");
+      setError(message);
+      toast.error("Verification Failed", message);
+      triggerShake();
+      // Clear all OTP fields for re-entry
+      setOtp(Array(OTP_LENGTH).fill(""));
+      inputRefs.current[0]?.focus();
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleResend = async () => {
+    toast.info("Resend", "If you haven't received the code, check your spam folder or try registering again.");
+  };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.keyboardContainer}
-    >
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.topSection}>
-          <TopNavBarComponent showBack title="OTP Verification" />
-          <View style={styles.content}>
-            <Text style={styles.title}>Verify Your Number</Text>
-            <Text style={styles.subtitle}>
-              We sent a 4-digit verification code to{"\n"}
-              <Text style={styles.phoneText}>{user.phone || "+237 6XX XX XX XX"}</Text>
-            </Text>
+    <Animated.View style={[styles.container, { opacity: fadeIn }]}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Verify Email</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
-            <View style={styles.codeContainer}>
-              {code.map((digit, idx) => (
-                <TextInput
-                  key={idx}
-                  ref={inputRefs[idx]}
-                  style={[styles.digitInput, error ? styles.digitInputError : null]}
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  value={digit}
-                  onChangeText={(text) => handleChange(text, idx)}
-                  onKeyPress={(e) => handleKeyPress(e, idx)}
-                  textAlign="center"
-                  autoFocus={idx === 0}
-                />
-              ))}
-            </View>
+      <View style={styles.content}>
+        {/* Lock Icon */}
+        <View style={styles.iconContainer}>
+          <Ionicons name="mail-open-outline" size={48} color={COLORS.primary} />
+        </View>
 
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        <Text style={styles.title}>Check your email</Text>
+        <Text style={styles.subtitle}>
+          We sent a 6-digit verification code to
+        </Text>
+        <Text style={styles.emailText}>{maskedEmail}</Text>
 
-            <View style={styles.resendContainer}>
-              {timer > 0 ? (
-                <Text style={styles.timerText}>Resend code in {timer}s</Text>
-              ) : (
-                <TouchableOpacity onPress={handleResend}>
-                  <Text style={styles.resendLink}>Resend Code</Text>
-                </TouchableOpacity>
-              )}
-            </View>
+        {/* OTP Input Grid */}
+        <Animated.View
+          style={[styles.otpContainer, { transform: [{ translateX: shakeAnim }] }]}
+        >
+          {otp.map((digit, index) => (
+            <TextInput
+              key={index}
+              ref={(ref) => { inputRefs.current[index] = ref; }}
+              style={[
+                styles.otpBox,
+                digit ? styles.otpBoxFilled : {},
+                error ? styles.otpBoxError : {},
+              ]}
+              value={digit}
+              onChangeText={(text) => handleChange(text, index)}
+              onKeyPress={({ nativeEvent }) => handleKeyPress(nativeEvent.key, index)}
+              keyboardType="number-pad"
+              maxLength={index === 0 ? OTP_LENGTH : 1}
+              selectTextOnFocus
+            />
+          ))}
+        </Animated.View>
+
+        {error ? (
+          <View style={styles.errorRow}>
+            <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+            <Text style={styles.errorText}>{error}</Text>
           </View>
-        </View>
+        ) : null}
 
-        <View style={styles.bottomSection}>
-          <Button
-            title="Verify Code"
-            onPress={handleVerify}
-            disabled={!isComplete}
-            type="primary"
-          />
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+        <TouchableOpacity onPress={handleResend} style={styles.resendButton} activeOpacity={0.7}>
+          <Text style={styles.resendText}>
+            Didn't get the code? <Text style={styles.resendLink}>Resend</Text>
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.bottomSection, { bottom: keyboardHeight > 0 ? keyboardHeight + 14 : 36 }]}>
+        <Button
+          title={isSubmitting ? "Verifying..." : "Verify & Continue"}
+          onPress={handleVerify}
+          disabled={!isComplete || isSubmitting}
+          loading={isSubmitting}
+          type="primary"
+        />
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardContainer: {
+  container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  container: {
-    flexGrow: 1,
-    justifyContent: "space-between",
     paddingHorizontal: SPACING.containerPadding,
-    paddingTop: 50,
-    paddingBottom: 40,
+    paddingTop: 56,
   },
-  topSection: {
-    flex: 1,
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  headerTitle: { fontSize: 17, fontWeight: "800", color: COLORS.primary },
+  headerSpacer: { width: 44, height: 44 },
   content: {
-    marginTop: 30,
+    flex: 1,
+    alignItems: "center",
+    paddingTop: 48,
+  },
+  iconContainer: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: COLORS.primaryContainer + "20",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
   },
   title: {
-    fontSize: TYPOGRAPHY.headlineLg.fontSize,
-    fontWeight: "700",
+    fontSize: 26,
+    fontWeight: "900",
     color: COLORS.primary,
     marginBottom: 8,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.bodyMd.fontSize,
+    fontSize: 15,
     color: COLORS.onSurfaceVariant,
-    lineHeight: 20,
-    marginBottom: 40,
+    textAlign: "center",
+    lineHeight: 22,
   },
-  phoneText: {
+  emailText: {
+    fontSize: 15,
     fontWeight: "700",
     color: COLORS.primary,
+    marginBottom: 32,
+    marginTop: 4,
   },
-  codeContainer: {
+  otpContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
+    justifyContent: "center",
+    gap: 10,
     marginBottom: 16,
   },
-  digitInput: {
-    width: 60,
-    height: 60,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
+  otpBox: {
+    width: 48,
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 2,
     borderColor: COLORS.outlineVariant,
-    borderRadius: ROUNDED.md,
+    backgroundColor: COLORS.surface,
+    textAlign: "center",
     fontSize: 24,
-    fontWeight: "700",
+    fontWeight: "800",
     color: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  digitInputError: {
+  otpBoxFilled: {
+    borderColor: COLORS.primaryContainer,
+    backgroundColor: COLORS.primaryContainer + "10",
+  },
+  otpBoxError: {
     borderColor: COLORS.error,
   },
-  errorText: {
-    color: COLORS.error,
-    fontSize: 12,
-    fontWeight: "600",
-    textAlign: "center",
+  errorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginTop: 8,
   },
-  resendContainer: {
-    alignItems: "center",
-    marginTop: 30,
+  errorText: { color: COLORS.error, fontSize: 13, fontWeight: "600" },
+  resendButton: {
+    marginTop: 24,
+    padding: 8,
   },
-  timerText: {
+  resendText: {
     fontSize: 14,
     color: COLORS.onSurfaceVariant,
-    fontWeight: "500",
   },
   resendLink: {
-    fontSize: 14,
-    color: COLORS.primaryContainer,
     fontWeight: "700",
-    textDecorationLine: "underline",
+    color: COLORS.primaryContainer,
   },
   bottomSection: {
-    marginTop: 20,
+    position: "absolute",
+    left: SPACING.containerPadding,
+    right: SPACING.containerPadding,
+    alignItems: "center",
   },
 });
