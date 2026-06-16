@@ -1,20 +1,15 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
-import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { loadAppData, syncProfileFromSession as syncProfileFromSessionHelper, subscribeToAppData } from "./appService";
 import { Session } from "@supabase/supabase-js";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
 import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
 import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
-import { PROVIDER_CODES } from "../lib/pawapay/constants";
+import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
+import { loadAppData, subscribeToAppData, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
+import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
 
-const generateId = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-};
+const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -134,7 +129,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ensureSupabaseConfigured();
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
-    await syncProfileFromSession(data.session);
+    const completedProfile = await syncProfileFromSession(data.session);
+    return { needsProfileSetup: !completedProfile };
   };
 
   const registerWithEmail = async (email: string, password: string, fullName: string, phone: string, mnoProvider?: string) => {
@@ -166,7 +162,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!email) throw new Error("Email is missing. Please go back and register again.");
     const { data, error } = await supabase.auth.verifyOtp({ email, token, type: "signup" });
     if (error) throw new Error(error.message);
-    await syncProfileFromSession(data.session);
+    const completedProfile = await syncProfileFromSession(data.session);
+    return { needsProfileSetup: !completedProfile };
   };
 
   const updateProfile = async (name: string, email: string, avatarUrl?: string, phone?: string) => {
@@ -522,4 +519,5 @@ export const useApp = () => {
   return context;
 };
 
-export type { UserProfile, Transaction, Circle, Escrow, AppNotification } from "./types";
+export type { AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
+

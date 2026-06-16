@@ -16,20 +16,20 @@ export default function Wallet() {
 
   const filteredTransactions = transactions.filter((tx) => {
     if (activeTab === "all") return true;
-    if (activeTab === "deposit") return tx.type === "deposit" || tx.type === "receive";
-    if (activeTab === "send") return tx.type === "send" || tx.type === "withdrawal" || tx.type === "tontine_pay";
+    if (activeTab === "deposit") return tx.type === "top_up" || tx.type === "refund" || tx.type === "disbursement" || tx.type === "escrow_release";
+    if (activeTab === "send") return tx.type === "contribution" || tx.type === "escrow_lock";
     return true;
   });
 
   const getTransactionIcon = (type: string) => {
     switch (type) {
-      case "deposit":
-        return { name: "arrow-down-outline" as const, color: COLORS.secondary };
-      case "withdrawal":
+      case "top_up":
+        return { name: "arrow-up-outline" as const, color: COLORS.secondary };
+      case "contribution":
         return { name: "arrow-up-outline" as const, color: COLORS.onSurfaceVariant };
-      case "send":
-        return { name: "arrow-forward-outline" as const, color: COLORS.onSurfaceVariant };
-      case "receive":
+      case "disbursement":
+        return { name: "arrow-down-outline" as const, color: COLORS.secondary };
+      case "refund":
         return { name: "arrow-back-outline" as const, color: COLORS.secondary };
       case "escrow_lock":
         return { name: "lock-closed-outline" as const, color: COLORS.primary };
@@ -42,7 +42,7 @@ export default function Wallet() {
 
   const renderTransactionRow = (item: Transaction, idx: number) => {
     const icon = getTransactionIcon(item.type);
-    const isPositive = ["deposit", "receive", "tontine_payout", "escrow_release"].includes(item.type) && item.type !== "escrow_release";
+    const isPositive = ["top_up", "refund", "disbursement", "escrow_release"].includes(item.type);
     
     return (
       <View key={item.id}>

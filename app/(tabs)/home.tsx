@@ -14,35 +14,26 @@ export default function Home() {
 
   const getTransactionDetails = (type: string) => {
     switch (type) {
-      case "deposit":
-        return {
-          icon: "arrow-down-outline" as const,
-          color: COLORS.secondary,
-          bgColor: "rgba(0, 109, 67, 0.08)",
-          sign: "+",
-          typeLabel: "Top up",
-        };
-      case "receive":
-      case "tontine_payout":
+      case "top_up":
+      case "refund":
       case "escrow_release":
+      case "disbursement":
         return {
-          icon: "arrow-down-outline" as const,
+          icon: "arrow-up-outline" as const,
           color: COLORS.secondary,
           bgColor: "rgba(0, 109, 67, 0.08)",
           sign: "+",
-          typeLabel: type === "tontine_payout" ? "Payout" : type === "escrow_release" ? "Release" : "Received",
+          typeLabel: type === "top_up" ? "Top up" : type === "disbursement" ? "Payout" : type === "refund" ? "Refund" : "Release",
         };
-      case "withdrawal":
-      case "send":
+      case "contribution":
       case "escrow_lock":
-      case "tontine_pay":
       default:
         return {
           icon: "arrow-up-outline" as const,
           color: COLORS.outline,
           bgColor: "#f0f2f5",
           sign: "-",
-          typeLabel: type === "tontine_pay" ? "Auto-pay" : type === "escrow_lock" ? "Escrow lock" : "Transfer",
+          typeLabel: type === "contribution" ? "Contribution" : type === "escrow_lock" ? "Escrow lock" : "Transfer",
         };
     }
   };
@@ -201,7 +192,7 @@ export default function Home() {
           <TouchableOpacity 
             activeOpacity={0.9} 
             style={styles.cardButtonOutline} 
-            onPress={() => router.push("/wallet")}
+            onPress={() => router.push("/send")}
           >
             <Ionicons name="paper-plane" size={14} color="#ffffff" style={styles.sendIconRotated} />
             <Text style={styles.cardButtonOutlineText}>Send</Text>

@@ -85,6 +85,7 @@ export interface AppContextType {
   updateProfile: (name: string, email: string, avatarUrl?: string, phone?: string) => Promise<void>;
   setOperator: (op: "MTN" | "Orange") => void;
   topUpWallet: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
+  sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;
   createCircle: (name: string, type: "Tontine" | "Goal", goal: number, contribution: number, frequency: "Weekly" | "Monthly", maxMembers: number) => Promise<{ id: string; name: string; code: string }>;
   joinCircleByCode: (code: string) => Promise<{ success: boolean; message: string }>;
   payCircleContribution: (circleId: string) => Promise<void>;
