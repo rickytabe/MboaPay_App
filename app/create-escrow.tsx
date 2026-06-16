@@ -4,6 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
+import { Ionicons } from "@expo/vector-icons";
+import UserSearchModal from "../components/UserSearchModal";
 import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import Button from "../components/Button";
@@ -17,6 +19,7 @@ export default function CreateEscrow() {
   const [amount, setAmount] = useState("");
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
   const [counterpartyPhone, setCounterpartyPhone] = useState("");
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [counterpartyName, setCounterpartyName] = useState("");
   const [isValidatingPhone, setIsValidatingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState("");
@@ -162,9 +165,15 @@ export default function CreateEscrow() {
 
             {/* Counterparty */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>
-                {role === "buyer" ? "Seller's Phone Number" : "Buyer's Phone Number"}
-              </Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.label}>
+                  {role === "buyer" ? "Seller's Phone Number" : "Buyer's Phone Number"}
+                </Text>
+                <TouchableOpacity onPress={() => setSearchModalVisible(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="search" size={14} color={COLORS.primary} style={{marginRight: 4}} />
+                  <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.primary }}>Search User</Text>
+                </TouchableOpacity>
+              </View>
               <TextInput
                 style={styles.input}
                 placeholder="e.g. 670000000"
@@ -223,6 +232,14 @@ export default function CreateEscrow() {
           />
         </View>
       </ScrollView>
+      <UserSearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        onSelectUser={(u) => {
+          setCounterpartyPhone(u.phone.replace('+237', ''));
+          setSearchModalVisible(false);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 }

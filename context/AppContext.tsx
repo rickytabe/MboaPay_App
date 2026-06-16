@@ -112,8 +112,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { error } = await supabase.from("notifications").insert({
       user_id: userIdToUse,
       type,
-      title,
-      message,
+      message: `**${title}**\n\n${message}`,
     });
     if (error) {
       console.warn("Notification record error:", error.message);
@@ -347,7 +346,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const executeWalletTransfer = async (
     userId: string,
     amount: number,
-    type: 'top_up' | 'disbursement' | 'escrow_deposit' | 'escrow_release' | 'contribution' | 'refund',
+    type: 'top_up' | 'disbursement' | 'escrow_deposit' | 'escrow_release' | 'contribution' | 'refund' | 'transfer_in' | 'transfer_out',
     transactionId: string,
     metadata?: any,
     operator?: string
@@ -357,7 +356,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     
     const currentBalance = walletData.balance || 0;
     let newBalance = currentBalance;
-    const isCredit = ['top_up', 'escrow_release', 'refund'].includes(type);
+    const isCredit = ['top_up', 'escrow_release', 'refund', 'transfer_in'].includes(type);
     
     if (isCredit) {
       newBalance += amount;
@@ -453,28 +452,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       if (amount > walletBalance) throw new Error("Insufficient wallet balance for this transfer.");
 
-      const payoutId = generateId();
-      const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
-
-      const { error: txError } = await supabase.from('transactions').insert({
-        id: payoutId, user_id: user.id, amount, type: 'disbursement', status: 'pending', mno_provider: operator
-      });
-      if (txError) throw new Error(txError.message);
-
-      await initiatePayout({ payoutId, phoneNumber: phone, provider, amount, note: note || "Wallet Transfer" });
-      const finalStatus = await pollPayoutUntilFinal(payoutId);
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      const finalPhone = cleanPhone.startsWith('237') ? cleanPhone : `237${cleanPhone}`;
+      const phonePlus = `+${finalPhone}`;
       
-      if (finalStatus.status === "COMPLETED") {
-        await executeWalletTransfer(user.id, amount, 'disbursement', payoutId, finalStatus, operator);
+      const { data: recipientData } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .or(`phone.eq.${finalPhone},phone.eq.${phonePlus}`)
+        .maybeSingle();
 
+      const txId = generateId();
+
+      if (recipientData && recipientData.id) {
+        // Internal Transfer
+        await executeWalletTransfer(user.id, amount, 'transfer_out', txId, { recipientPhone: phone, recipientName: recipientData.full_name, note });
+        await executeWalletTransfer(recipientData.id, amount, 'transfer_in', txId, { senderPhone: user.phone, senderName: user.name, note });
+        
         await Promise.all([
-          createNotificationRecord('disbursement', 'Transfer Successful', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
-          presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
+          createNotificationRecord('transfer_out', 'Transfer Sent', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
+          presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
+          createNotificationRecord('transfer_in', 'Transfer Received', `You received ${amount.toLocaleString()} XAF from ${user.name || user.phone}.`, recipientData.id),
         ]);
-        return payoutId;
+        return txId;
       } else {
-        await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', payoutId);
-        throw new Error(`Transfer failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+        // External Payout via PawaPay
+        const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+        const { error: txError } = await supabase.from('transactions').insert({
+          id: txId, user_id: user.id, amount, type: 'disbursement', status: 'pending', mno_provider: operator
+        });
+        if (txError) throw new Error(txError.message);
+
+        await initiatePayout({ payoutId: txId, phoneNumber: phone, provider, amount, note: note || "Wallet Transfer" });
+        const finalStatus = await pollPayoutUntilFinal(txId);
+        
+        if (finalStatus.status === "COMPLETED") {
+          await executeWalletTransfer(user.id, amount, 'disbursement', txId, finalStatus, operator);
+
+          await Promise.all([
+            createNotificationRecord('disbursement', 'Transfer Successful', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
+            presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
+          ]);
+          return txId;
+        } else {
+          await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', txId);
+          throw new Error(`Transfer failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+        }
       }
     } catch (error: any) {
       console.error("[sendMoney] Exception:", error);

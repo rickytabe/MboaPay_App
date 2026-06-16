@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import Card from "../components/Card";
 import TopNavBarComponent from "../components/TopNavBarComponent";
+import UserSearchModal from "../components/UserSearchModal";
 import { COLORS, ROUNDED, SPACING } from "../constants/Theme";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
@@ -17,6 +18,8 @@ export default function Send() {
   const [amount, setAmount] = useState("");
   const [phone, setPhone] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [note, setNote] = useState("");
+  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detectedOperator, setDetectedOperator] = useState<"MTN" | "Orange" | null>(null);
 
@@ -105,7 +108,7 @@ export default function Send() {
     setLoading(true);
     
     try {
-        const txId = await sendMoney(value, finalPhone, finalOperator, "MboaPay Transfer");
+        const txId = await sendMoney(value, finalPhone, finalOperator, note.trim() || "MboaPay Transfer");
         
         router.replace({
             pathname: "/transaction-receipt",
@@ -207,9 +210,16 @@ export default function Send() {
               <View style={styles.inputContainer}>
                   <View style={styles.labelRow}>
                       <Text style={styles.label}>Recipient Phone Number</Text>
-                      <TouchableOpacity onPress={openContacts} style={styles.contactsButton}>
-                          <Text style={styles.contactsButtonText}>Select Contact</Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <TouchableOpacity onPress={() => setSearchModalVisible(true)} style={styles.contactsButton}>
+                              <Ionicons name="search" size={14} color={COLORS.primary} style={{marginRight: 4}} />
+                              <Text style={styles.contactsButtonText}>Search Directory</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={openContacts} style={styles.contactsButton}>
+                              <Ionicons name="people" size={14} color={COLORS.primary} style={{marginRight: 4}} />
+                              <Text style={styles.contactsButtonText}>Contacts</Text>
+                          </TouchableOpacity>
+                      </View>
                   </View>
                   <View style={styles.inputCard}> 
                       <TextInput
@@ -245,6 +255,19 @@ export default function Send() {
                     <Text style={styles.recipientText}>Recipient: {recipientName}</Text>
                   ) : null}
               </View>
+
+              {/* Note Input */}
+              <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Description (Optional)</Text>
+                  <TextInput
+                      style={styles.input}
+                      placeholder="What is this for?"
+                      placeholderTextColor={COLORS.onSurfaceVariant}
+                      value={note}
+                      onChangeText={setNote}
+                      maxLength={50}
+                  />
+              </View>
             </View>
 
             <View style={styles.bottomSection}>
@@ -259,6 +282,15 @@ export default function Send() {
 
           </ScrollView>
       </KeyboardAvoidingView>
+      <UserSearchModal
+        visible={searchModalVisible}
+        onClose={() => setSearchModalVisible(false)}
+        onSelectUser={(u: any) => {
+          setPhone(u.phone.replace('+237', ''));
+          setRecipientName(u.full_name);
+          setSearchModalVisible(false);
+        }}
+      />
 
       {/* Contacts Modal */}
       <Modal visible={contactsModalVisible} animationType="slide" transparent={true}>

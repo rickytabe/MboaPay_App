@@ -18,6 +18,7 @@ export interface Transaction {
   date: string;
   operator?: string;
   status: string;
+  metadata?: any;
 }
 
 export interface CircleMember {

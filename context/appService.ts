@@ -35,6 +35,15 @@ const mapTransaction = (tx: any): Transaction => {
   } else if (tx.type === "refund") {
     title = "Refund";
     subtitle = "Funds returned";
+  } else if (tx.type === "transfer_out") {
+    title = "Transfer Sent";
+    subtitle = tx.metadata?.recipientName ? `Sent to ${tx.metadata.recipientName}` : "Internal transfer";
+  } else if (tx.type === "transfer_in") {
+    title = "Transfer Received";
+    subtitle = tx.metadata?.senderName ? `From ${tx.metadata.senderName}` : "Internal transfer";
+  } else if (tx.type === "disbursement") {
+    title = "Withdrawal";
+    subtitle = "To Mobile Money";
   }
 
   return {
@@ -46,6 +55,7 @@ const mapTransaction = (tx: any): Transaction => {
     date: dateStr,
     operator: tx.mno_provider,
     status: tx.status === "successful" ? "success" : tx.status,
+    metadata: tx.metadata,
   };
 };
 
