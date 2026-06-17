@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
 import { useQuery } from "@tanstack/react-query";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { LIGHT_COLORS, DARK_COLORS } from "../constants/Theme";
+import { DARK_COLORS, LIGHT_COLORS } from "../constants/Theme";
 import { notifyAdminOfPendingMember, notifyUserOfApproval, registerPushNotifications, savePushToken } from "../lib/notificationService";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
@@ -11,18 +11,12 @@ import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/
 import { uploadAvatarToSupabase } from "../lib/uploadImage";
 import { fetchCircles, fetchEscrows, fetchNotifications, fetchTransactions, fetchWalletBalance, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
 import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
+import * as Notifications from "expo-notifications";
 
-const loadNotificationsModule = async () => {
-  try {
-    return await import("expo-notifications");
-  } catch (error) {
-    console.warn("Could not load expo-notifications:", error);
-    return null;
-  }
-};
+
 
 const generateId = () => {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
@@ -59,8 +53,6 @@ const persistAvatar = async (userId: string, avatarUrl: string) => {
 };
 
 const setNotificationHandler = async () => {
-  const Notifications = await loadNotificationsModule();
-  if (!Notifications) return;
 
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -104,7 +96,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     loadTheme();
   }, []);
-  
+
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [selectedOperator, setSelectedOperator] = useState<'MTN' | 'Orange'>('MTN');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -144,8 +136,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const presentLocalNotification = async (title: string, body: string) => {
     try {
       await setNotificationHandler();
-      const Notifications = await loadNotificationsModule();
-      if (!Notifications) return;
 
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -310,15 +300,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         data: { full_name: fullName, phone, mno_provider: mnoProvider || null }
       }
     });
-    
+
     if (error) {
       console.error("SUPABASE SIGNUP ERROR:", error);
       throw new Error(error.message);
     }
-    
+
     // Store the email so the OTP screen can use it
     setPendingEmail(email);
-    
+
     // Don't sync session yet — user must verify OTP first
     return { pendingEmail: email };
   };
@@ -374,7 +364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateAvatar = async (avatarUrl: string) => {
     if (!user.id) throw new Error("You must be signed in to update your avatar.");
-    
+
     const remotePath = await uploadAvatarToSupabase(avatarUrl, user.id);
     if (!remotePath) throw new Error("Failed to upload avatar image.");
 
@@ -410,7 +400,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // strip local 237 if they entered it so we only append once
         const basePhone = cleanPhone.startsWith("237") ? cleanPhone.slice(3) : cleanPhone;
         const fullPhone = `+237${basePhone}`;
-        
+
         const resp = await fetch("https://api.sandbox.pawapay.io/v2/predict-provider", {
           method: "POST",
           headers: {
@@ -442,11 +432,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ) => {
     const { data: walletData, error: fetchError } = await supabase.from('wallets').select('balance').eq('user_id', userId).single();
     if (fetchError) throw new Error("Could not fetch wallet balance.");
-    
+
     const currentBalance = walletData.balance || 0;
     let newBalance = currentBalance;
     const isCredit = ['top_up', 'escrow_release', 'refund', 'transfer_in'].includes(type);
-    
+
     if (isCredit) {
       newBalance += amount;
     } else {
@@ -489,7 +479,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await initiateDeposit({ depositId, phoneNumber: user.phone, provider, amount, note: "Wallet Top-up" });
     const finalStatus = await pollDepositUntilFinal(depositId);
-    
+
     if (finalStatus.status === "COMPLETED") {
       await executeWalletTransfer(user.id, amount, 'top_up', depositId, finalStatus, operator);
 
@@ -518,7 +508,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       await initiatePayout({ payoutId, phoneNumber: user.phone, provider, amount, note: "Wallet Withdrawal" });
       const finalStatus = await pollPayoutUntilFinal(payoutId);
-      
+
       if (finalStatus.status === "COMPLETED") {
         await executeWalletTransfer(user.id, amount, 'disbursement', payoutId, finalStatus, operator);
 
@@ -545,7 +535,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const finalPhone = cleanPhone.startsWith('237') ? cleanPhone : `237${cleanPhone}`;
       if (finalPhone === user.phone) throw new Error("You cannot send money to yourself.");
       const phonePlus = `+${finalPhone}`;
-      
+
       const { data: recipientData } = await supabase
         .from('users')
         .select('id, full_name')
@@ -556,9 +546,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (recipientData && recipientData.id) {
         // Internal Transfer
+        const txIdIn = generateId();
         await executeWalletTransfer(user.id, amount, 'transfer_out', txId, { recipientPhone: phone, recipientName: recipientData.full_name, note });
-        await executeWalletTransfer(recipientData.id, amount, 'transfer_in', txId, { senderPhone: user.phone, senderName: user.name, note });
-        
+        await executeWalletTransfer(recipientData.id, amount, 'transfer_in', txIdIn, { senderPhone: user.phone, senderName: user.name, note });
+
         await Promise.all([
           createNotificationRecord('transfer_out', 'Transfer Sent', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
           presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
@@ -576,7 +567,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         await initiatePayout({ payoutId: txId, phoneNumber: phone, provider, amount, note: note || "Wallet Transfer" });
         const finalStatus = await pollPayoutUntilFinal(txId);
-        
+
         if (finalStatus.status === "COMPLETED") {
           await executeWalletTransfer(user.id, amount, 'disbursement', txId, finalStatus, operator);
 
@@ -601,7 +592,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ id: string, name: string, code: string }> => {
     // Generate a random 6 character alphanumeric code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    
+
     const { data: circleData, error: circleError } = await supabase.from('circles').insert({
       creator_id: user.id,
       name,
@@ -804,8 +795,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanPhone = otherParty.replace(/[^0-9]/g, "");
     let formattedPhone = "";
     if (cleanPhone.length >= 9) {
-      const basePhone = cleanPhone.length === 12 && cleanPhone.startsWith("237") 
-        ? cleanPhone.slice(3) 
+      const basePhone = cleanPhone.length === 12 && cleanPhone.startsWith("237")
+        ? cleanPhone.slice(3)
         : cleanPhone.slice(-9);
       formattedPhone = `+237${basePhone}`;
     }
@@ -818,7 +809,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } else {
       query = query.ilike('full_name', otherParty);
     }
-    
+
     const { data: counterpartyUser, error: cpError } = await query.maybeSingle();
     if (cpError || !counterpartyUser?.id) {
       throw new Error("Counterparty user not found on MboaPay. Please verify their registered phone number or name.");
@@ -866,7 +857,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .from('escrows')
       .update({ status: 'locked' })
       .eq('id', escrowId);
-    
+
     if (updateError) throw new Error(updateError.message);
     await refreshData();
   };
@@ -882,7 +873,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .from('escrows')
       .update({ status: 'released' })
       .eq('id', escrowId);
-      
+
     if (updateError) throw new Error(updateError.message);
     await refreshData();
   };
@@ -903,7 +894,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await refreshData();
   };
 
- 
+
 
   const markNotificationsAsRead = async () => {
     const unreadIds = notifications.filter(n => !n.read).map(n => n.id);

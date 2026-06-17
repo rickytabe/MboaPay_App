@@ -1,14 +1,8 @@
 import Constants from "expo-constants";
 import { supabase } from "./supabase";
+import * as Notifications from "expo-notifications";
 
-const loadNotificationsModule = async () => {
-  try {
-    return await import("expo-notifications");
-  } catch (error) {
-    console.warn("Could not load expo-notifications:", error);
-    return null;
-  }
-};
+
 
 const isExpoGo = () => Constants.appOwnership === "expo";
 const getExpoProjectId = () =>
@@ -33,11 +27,6 @@ export const registerPushNotifications = async (): Promise<string | null> => {
     console.warn(
       "Missing Expo projectId. Set EXPO_PROJECT_ID or add expo.projectId to app config for push notifications."
     );
-    return null;
-  }
-
-  const Notifications = await loadNotificationsModule();
-  if (!Notifications) {
     return null;
   }
 
