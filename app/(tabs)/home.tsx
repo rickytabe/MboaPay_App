@@ -241,7 +241,14 @@ export default function Home() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.circlesScroll}
       >
-        {circles.map(renderCircleCard)}
+        {[...circles]
+          .filter(c => c.isMember)
+          .sort((a, b) => {
+            const timeA = Math.max(new Date(a.joinedAt || a.createdAt || 0).getTime(), new Date(a.updatedAt || 0).getTime());
+            const timeB = Math.max(new Date(b.joinedAt || b.createdAt || 0).getTime(), new Date(b.updatedAt || 0).getTime());
+            return timeB - timeA;
+          })
+          .map(renderCircleCard)}
       </ScrollView>
 
       {/* Recent Transactions Section */}

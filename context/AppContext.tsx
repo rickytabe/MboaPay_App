@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Session } from "@supabase/supabase-js";
+import { Session, PostgrestError } from "@supabase/supabase-js";
 import { useQuery } from "@tanstack/react-query";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { DARK_COLORS, LIGHT_COLORS } from "../constants/Theme";
@@ -7,6 +7,7 @@ import { notifyAdminOfPendingMember, notifyUserOfApproval, registerPushNotificat
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
 import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
+import { checkAndTriggerDisbursement } from "../lib/circleDisbursement";
 import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
 import { uploadAvatarToSupabase } from "../lib/uploadImage";
 import { fetchCircles, fetchEscrows, fetchNotifications, fetchTransactions, fetchWalletBalance, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
@@ -104,11 +105,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const { data: qWalletBalance, refetch: refetchWallet } = useQuery({ queryKey: ['walletBalance', user.id], queryFn: () => fetchWalletBalance(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
-  const { data: qTransactions, refetch: refetchTx } = useQuery({ queryKey: ['transactions', user.id], queryFn: () => fetchTransactions(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
-  const { data: qNotifications, refetch: refetchNotif } = useQuery({ queryKey: ['notifications', user.id], queryFn: () => fetchNotifications(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
-  const { data: qCircles, refetch: refetchCircles } = useQuery({ queryKey: ['circles', user.id], queryFn: () => fetchCircles(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
-  const { data: qEscrows, refetch: refetchEscrows } = useQuery({ queryKey: ['escrows', user.id], queryFn: () => fetchEscrows(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qWalletBalance, refetch: refetchWallet, isLoading: isWalletLoading } = useQuery({ queryKey: ['walletBalance', user.id], queryFn: () => fetchWalletBalance(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qTransactions, refetch: refetchTx, isLoading: isTxLoading } = useQuery({ queryKey: ['transactions', user.id], queryFn: () => fetchTransactions(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qNotifications, refetch: refetchNotif, isLoading: isNotifLoading } = useQuery({ queryKey: ['notifications', user.id], queryFn: () => fetchNotifications(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qCircles, refetch: refetchCircles, isLoading: isCirclesLoading } = useQuery({ queryKey: ['circles', user.id], queryFn: () => fetchCircles(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qEscrows, refetch: refetchEscrows, isLoading: isEscrowsLoading } = useQuery({ queryKey: ['escrows', user.id], queryFn: () => fetchEscrows(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+
+  const isDataLoading = isWalletLoading || isTxLoading || isNotifLoading || isCirclesLoading || isEscrowsLoading;
 
   useEffect(() => { if (qWalletBalance !== undefined) setWalletBalance(qWalletBalance); }, [qWalletBalance]);
   useEffect(() => { if (qTransactions) setTransactions(qTransactions); }, [qTransactions]);
@@ -216,8 +219,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [syncProfileFromSession]);
 
-  // (Realtime app data subscriptions replaced by TanStack Query polling)
+  // Realtime app data subscriptions triggering TanStack Query polling
+  useEffect(() => {
+    if (!user.id || !user.isLoggedIn) return;
 
+    const channels = [
+      supabase.channel('public:wallets').on('postgres_changes', { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user.id}` }, () => void refreshData()),
+      supabase.channel('public:transactions').on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${user.id}` }, () => void refreshData()),
+      supabase.channel('public:circles').on('postgres_changes', { event: '*', schema: 'public', table: 'circles' }, () => void refreshData()),
+      supabase.channel('public:circle_members').on('postgres_changes', { event: '*', schema: 'public', table: 'circle_members' }, () => void refreshData()),
+      supabase.channel('public:contributions').on('postgres_changes', { event: '*', schema: 'public', table: 'contributions' }, () => void refreshData()),
+      supabase.channel('public:escrows').on('postgres_changes', { event: '*', schema: 'public', table: 'escrows' }, () => void refreshData()),
+    ];
+
+    channels.forEach(channel => channel.subscribe());
+
+    return () => {
+      channels.forEach(channel => void supabase.removeChannel(channel));
+    };
+  }, [user.id, user.isLoggedIn]);
   // Realtime notifications listener to present local alerts instantly
   useEffect(() => {
     if (!user.id || !user.isLoggedIn) return;
@@ -588,7 +608,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const createCircle = async (
-    name: string, type: 'solo' | 'pool' | 'rotation', goal: number, contribution: number, frequency: 'daily' | 'weekly' | 'monthly', maxMembers: number, visibility: 'public' | 'private' = 'private'
+    name: string, type: 'solo' | 'pool' | 'rotation', goal: number, contribution: number, frequency: 'daily' | 'weekly' | 'monthly', maxMembers: number, visibility: 'public' | 'private' = 'private', commitmentDepositPct?: number
   ): Promise<{ id: string, name: string, code: string }> => {
     // Generate a random 6 character alphanumeric code
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -602,7 +622,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contribution_amount: contribution,
       frequency,
       invite_code: code,
-      visibility: visibility
+      visibility: visibility,
+      commitment_deposit_percentage: type === 'rotation' ? (commitmentDepositPct || 0) : 0
     }).select().single();
 
     if (circleError) throw new Error(circleError.message);
@@ -624,7 +645,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const joinCircleByCode = async (code: string): Promise<{ success: boolean; message: string }> => {
     // 1. Find the circle by invite code
-    const { data: circleData, error: fetchError } = await supabase.from('circles').select('id, name, circle_type, visibility').eq('invite_code', code).single();
+    const { data: circleData, error: fetchError } = await supabase.from('circles').select('id, name, circle_type, visibility, contribution_amount, commitment_deposit_percentage').eq('invite_code', code).single();
     if (fetchError || !circleData) return { success: false, message: 'Invalid or inactive invite code' };
 
     // 2. Check if already a member
@@ -636,18 +657,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const memberCount = count || 0;
     const isPrivate = circleData.visibility === 'private';
 
-    // 4. Insert the user into circle_members with pending status for private circles
-    const { error: insertError } = await supabase.from('circle_members').insert({
+    // 4. Handle Rotation Commitment Deposit
+    let depositAmount = 0;
+    if (circleData.circle_type === 'rotation') {
+      const pct = circleData.commitment_deposit_percentage || 0;
+      depositAmount = circleData.contribution_amount * (pct / 100);
+      if (walletBalance < depositAmount) {
+        return { success: false, message: `Insufficient balance. A ${pct}% commitment deposit (${depositAmount.toLocaleString()} XAF) is required.` };
+      }
+    }
+
+    // 5. Insert the user into circle_members with pending status for private circles
+    const { data: memberData, error: insertError }: { data: { id: string } | null, error: PostgrestError | null } = await supabase.from('circle_members').insert({
       circle_id: circleData.id,
       user_id: user.id,
       role: 'member',
       rotation_order: memberCount + 1,
       deposit_status: isPrivate ? 'pending' : circleData.circle_type === 'rotation' ? 'pending' : 'paid',
-      member_status: isPrivate ? 'pending' : 'active'
-    });
+      member_status: isPrivate ? 'pending' : 'active',
+      commitment_deposit: depositAmount
+    }).select('id').single();
 
-    if (insertError) return { success: false, message: insertError.message };
+    if (insertError || !memberData) return { success: false, message: insertError?.message || 'Failed to join' };
 
+    // 6. Execute deposit payment if applicable
+    if (depositAmount > 0) {
+      const txId = generateId();
+      await executeWalletTransfer(user.id, depositAmount, 'contribution', txId, { circle: circleData.id });
+      
+      await supabase.from('contributions').insert({
+        circle_id: circleData.id,
+        member_id: memberData.id,
+        pawapay_deposit_id: txId,
+        amount: depositAmount,
+        cycle_number: 0,
+        status: 'successful',
+        due_at: new Date().toISOString(),
+        paid_at: new Date().toISOString()
+      });
+    }
     await refreshData();
 
     if (isPrivate) {
@@ -761,16 +809,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!circle) return;
     if (circle.contributionAmount > walletBalance) throw new Error("Insufficient wallet balance. Please top up first.");
 
+    const { data: member } = await supabase.from('circle_members').select('id').eq('circle_id', circleId).eq('user_id', user.id).single();
+    if (!member) throw new Error("Not a member of this circle");
+
     const txId = generateId();
+
+    let cycle_number = 1;
+    if (circle.rawType === "rotation") {
+      const { data: disburse } = await supabase.from("disbursements")
+        .select("round_number")
+        .eq("circle_id", circleId)
+        .order("round_number", { ascending: false })
+        .limit(1);
+      if (disburse && disburse.length > 0) {
+        cycle_number = (disburse[0].round_number || 0) + 1;
+      }
+    } else {
+      cycle_number = circle.currentRound;
+    }
 
     const { error: insertError } = await supabase.from('contributions').insert({
       circle_id: circleId,
-      user_id: user.id,
+      member_id: member.id, // Using correct schema column
       pawapay_deposit_id: txId,
       amount: circle.contributionAmount,
-      cycle_number: circle.currentRound,
-      status: 'COMPLETED',
-      due_at: new Date().toISOString()
+      cycle_number: cycle_number,
+      status: 'successful', // Lowercase per guidelines
+      due_at: new Date().toISOString(),
+      paid_at: new Date().toISOString()
     });
     if (insertError) throw new Error(insertError.message);
 
@@ -778,8 +844,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await supabase.from('circle_members')
       .update({ deposit_status: 'paid' })
-      .eq('circle_id', circleId)
-      .eq('user_id', user.id);
+      .eq('id', member.id);
+
+    // Call the standalone disbursement trigger (non-blocking)
+    checkAndTriggerDisbursement(circleId, member.id).catch(console.error);
 
     await refreshData();
   };
@@ -899,14 +967,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const markNotificationsAsRead = async () => {
     const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
     if (unreadIds.length === 0) return;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('notifications')
       .update({ read: true })
       .in('id', unreadIds)
-      .eq('user_id', user.id);
-    if (!error) {
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      .eq('user_id', user.id)
+      .select();
+
+    if (error) {
+      console.error("Failed to mark notifications as read:", error.message);
+      return;
     }
+
+    if (!data || data.length === 0) {
+      console.warn("markNotificationsAsRead: Query succeeded but 0 rows were updated. Check RLS or IDs.");
+      // Still update UI optimistically for better UX, though it might revert
+    }
+
+    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    await refetchNotif();
   };
 
   const resetAppState = () => {
@@ -967,6 +1046,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         authSession,
         hasAuthSession: Boolean(authSession),
         isAuthLoading,
+        isDataLoading,
         walletBalance,
         selectedOperator,
         transactions,

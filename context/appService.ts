@@ -27,26 +27,48 @@ const mapNotification = (notif: any): AppNotification => ({
   type: notif.type,
   message: notif.message || "",
   date: formatTimestamp(notif.created_at),
-  read: notif.is_read || false,
+  read: notif.read || false,
 });
 
-const mapCircle = (circle: any, currentUserId: string): Circle => {
+const mapCircle = async (circle: any, currentUserId: string): Promise<Circle> => {
   const me = circle.circle_members?.find((member: any) => member.user_id === currentUserId);
-  const mappedMembers = (circle.circle_members || []).map((member: any) => ({
-    id: member.id,
-    name: member.user_id === currentUserId ? (member.member_status === 'pending' ? "You (Pending)" : "You") : member.users?.full_name || "Member",
-    role: member.role || "member",
-    paid: member.deposit_status === "paid",
-    isPayout: false,
-    avatar: member.users?.avatar_url || "",
-    status: member.member_status,
-    isPending: member.member_status === 'pending',
+  const inactiveMemberStatuses = new Set(["exited", "removed", "rejected"]);
+  const isCurrentMember = Boolean(me && !inactiveMemberStatuses.has(me.member_status));
+  
+  const mappedMembers = await Promise.all((circle.circle_members || []).map(async (member: any) => {
+    let finalAvatarUrl = member.users?.avatar_url || "";
+    if (finalAvatarUrl && !finalAvatarUrl.startsWith("http")) {
+      const { data: signedUrlData } = await supabase.storage.from("User_avaters").createSignedUrl(finalAvatarUrl, 60 * 60 * 24 * 7);
+      if (signedUrlData?.signedUrl) {
+        finalAvatarUrl = signedUrlData.signedUrl;
+      }
+    }
+    return {
+      id: member.id,
+      name: member.user_id === currentUserId ? (member.member_status === 'pending' ? "You (Pending)" : "You") : member.users?.full_name || "Member",
+      role: member.role || "member",
+      paid: member.deposit_status === "paid",
+      isPayout: false,
+      avatar: finalAvatarUrl,
+      status: member.member_status,
+      isPending: member.member_status === 'pending',
+    };
   }));
+
+  let totalContributed = 0;
+  if (circle.contributions && Array.isArray(circle.contributions)) {
+    totalContributed = circle.contributions
+      .filter((c: any) => c.status === 'successful')
+      .reduce((sum: number, c: any) => sum + Number(c.amount), 0);
+  }
 
   return {
     id: circle.id,
     name: circle.name,
     type: circle.circle_type === "rotation" ? "Tontine" : "Goal",
+    createdAt: circle.created_at,
+    joinedAt: me?.created_at,
+    updatedAt: circle.updated_at,
     goalAmount: circle.target_amount,
     contributionAmount: circle.contribution_amount,
     membersCount: mappedMembers.length,
@@ -58,8 +80,10 @@ const mapCircle = (circle: any, currentUserId: string): Circle => {
     maxMembers: circle.max_members || mappedMembers.length,
     code: circle.invite_code || "",
     isTreasurer: me?.role === "treasurer",
-    isMember: !!me,
+    isMember: isCurrentMember,
     visibility: circle.visibility || "private",
+    rawType: circle.circle_type,
+    totalContributed,
   };
 };
 
@@ -103,8 +127,22 @@ export const fetchNotifications = async (userId: string): Promise<AppNotificatio
 };
 
 export const fetchCircles = async (userId: string): Promise<Circle[]> => {
-  const { data } = await supabase.from("circles").select("*, circle_members!inner(*, users(id, full_name, avatar_url))").eq("circle_members.user_id", userId);
-  return data ? data.map((circle: any) => mapCircle(circle, userId)) : [];
+  const { data: memberData } = await supabase.from("circle_members").select("circle_id").eq("user_id", userId);
+  const circleIds = memberData ? memberData.map(m => m.circle_id) : [];
+
+  let query = supabase.from("circles").select("*, circle_members(*, users(id, full_name, avatar_url)), contributions(amount, status)");
+  
+  if (circleIds.length > 0) {
+    query = query.or(`id.in.(${circleIds.join(',')}),visibility.eq.public`);
+  } else {
+    query = query.eq("visibility", "public");
+  }
+
+  const { data } = await query;
+  if (!data) return [];
+  
+  const circles = await Promise.all(data.map(async (circle: any) => await mapCircle(circle, userId)));
+  return circles;
 };
 
 export const fetchEscrows = async (userId: string): Promise<Escrow[]> => {
@@ -167,4 +205,3 @@ export const syncProfileFromSession = async (
 
   return completedProfile;
 };
-

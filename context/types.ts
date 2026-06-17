@@ -38,6 +38,9 @@ export interface Circle {
   id: string;
   name: string;
   type: string;
+  createdAt?: string;
+  joinedAt?: string;
+  updatedAt?: string;
   goalAmount: number;
   contributionAmount: number;
   frequency: string;
@@ -51,6 +54,8 @@ export interface Circle {
   isMember: boolean;
   visibility: 'public' | 'private';
   members: CircleMember[];
+  rawType: "solo" | "pool" | "rotation";
+  totalContributed?: number;
 }
 
 export interface Escrow {
@@ -84,6 +89,7 @@ export interface AppContextType {
   authSession: Session | null;
   hasAuthSession: boolean;
   isAuthLoading: boolean;
+  isDataLoading: boolean;
   walletBalance: number;
   selectedOperator: "MTN" | "Orange";
   transactions: Transaction[];

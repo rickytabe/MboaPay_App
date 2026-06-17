@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
-import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { ActivityIndicator, Alert, Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
 import InitialsAvatar from "../../components/InitialsAvatar";
@@ -10,15 +10,60 @@ import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Circle } from "../../context/types";
 
+const CircleSkeleton = ({ colors }: { colors: typeof LIGHT_COLORS }) => {
+  const anim = useRef(new Animated.Value(0.5)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0.5, duration: 800, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [anim]);
+
+  return (
+    <Card variant="elevated" style={{ backgroundColor: colors.surface, gap: 16, marginBottom: 16 }}>
+      <Animated.View style={{ opacity: anim }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          <View>
+            <View style={{ width: 60, height: 16, backgroundColor: colors.surfaceContainerHigh || colors.surfaceContainer, borderRadius: 4 }} />
+            <View style={{ width: 120, height: 20, backgroundColor: colors.surfaceContainerHigh || colors.surfaceContainer, borderRadius: 4, marginTop: 8 }} />
+            <View style={{ width: 80, height: 14, backgroundColor: colors.surfaceContainerHigh || colors.surfaceContainer, borderRadius: 4, marginTop: 4 }} />
+          </View>
+          <View style={{ width: 40, height: 20, backgroundColor: colors.surfaceContainerHigh || colors.surfaceContainer, borderRadius: 10 }} />
+        </View>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 16, padding: 12, backgroundColor: colors.surfaceContainer, borderRadius: 8 }}>
+          <View style={{ width: 60, height: 24, backgroundColor: colors.surfaceContainerHigh || colors.outlineVariant, borderRadius: 4 }} />
+          <View style={{ width: 60, height: 24, backgroundColor: colors.surfaceContainerHigh || colors.outlineVariant, borderRadius: 4 }} />
+          <View style={{ width: 60, height: 24, backgroundColor: colors.surfaceContainerHigh || colors.outlineVariant, borderRadius: 4 }} />
+        </View>
+      </Animated.View>
+    </Card>
+  );
+};
+
 export default function Circles() {
   const router = useRouter();
-  const { circles, joinCircleByCode, colors, theme } = useApp();
+  const { circles, joinCircleByCode, colors, theme, isDataLoading } = useApp();
   const styles = getStyles(colors);
   const [activeTab, setActiveTab] = useState<"joined" | "explore">("joined");
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
-  const joinedCircles = circles.filter(c => c.isMember);
-  const exploreCircles = circles.filter(c => !c.isMember && c.visibility === 'public');
+  const joinedCircles = circles
+    .filter((c) => c.isMember)
+    .sort((a, b) => {
+      const timeA = new Date(a.joinedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.joinedAt || b.createdAt || 0).getTime();
+      return timeA - timeB;
+    });
+  
+  const exploreCircles = circles
+    .filter((c) => !c.isMember && c.visibility === "public")
+    .sort((a, b) => {
+      const timeA = new Date(a.createdAt || 0).getTime();
+      const timeB = new Date(b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
 
   const handleCreateCircle = () => {
     router.push("/create-circle");
@@ -106,25 +151,31 @@ export default function Circles() {
             <Text style={styles.payoutTimeline}>
               <Ionicons name="time-outline" size={13} color={colors.secondary} /> {circle.nextPayoutDate}
             </Text>
-            <View style={styles.avatarsList}>
-              {circle.members.slice(0, 3).map((m, idx) => (
-                <View key={idx} style={{ marginLeft: idx > 0 ? -10 : 0 }}>
-                  {m.avatar ? (
-                    <Image
-                      source={{ uri: m.avatar }}
-                      style={styles.memberAvatar}
-                    />
-                  ) : (
-                    <InitialsAvatar name={m.name} size={24} />
-                  )}
-                </View>
-              ))}
-              {circle.membersCount > 3 && (
-                <View style={styles.moreAvatarsBadge}>
-                  <Text style={styles.moreAvatarsText}>+{circle.membersCount - 3}</Text>
-                </View>
-              )}
-            </View>
+            {circle.rawType !== 'solo' ? (
+              <View style={styles.avatarsList}>
+                {circle.members.slice(0, 3).map((m, idx) => (
+                  <View key={idx} style={{ marginLeft: idx > 0 ? -10 : 0 }}>
+                    {m.avatar ? (
+                      <Image
+                        source={{ uri: m.avatar }}
+                        style={styles.memberAvatar}
+                      />
+                    ) : (
+                      <InitialsAvatar name={m.name} size={24} />
+                    )}
+                  </View>
+                ))}
+                {circle.membersCount > 3 && (
+                  <View style={styles.moreAvatarsBadge}>
+                    <Text style={styles.moreAvatarsText}>+{circle.membersCount - 3}</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <View style={{ flex: 1, marginLeft: 16, height: 6, backgroundColor: colors.surfaceContainer, borderRadius: ROUNDED.full, overflow: 'hidden' }}>
+                <View style={{ width: `${Math.min(100, ((circle.totalContributed || 0) / (circle.goalAmount || 1)) * 100)}%`, height: '100%', backgroundColor: colors.secondary }} />
+              </View>
+            )}
           </View>
         </Card>
       </TouchableOpacity>
@@ -171,7 +222,13 @@ export default function Circles() {
         </View>
 
         {/* List Content */}
-        {activeTab === "joined" ? (
+        {isDataLoading && circles.length === 0 ? (
+          <View style={styles.listSection}>
+            <CircleSkeleton colors={colors} />
+            <CircleSkeleton colors={colors} />
+            <CircleSkeleton colors={colors} />
+          </View>
+        ) : activeTab === "joined" ? (
           <View style={styles.listSection}>
             {joinedCircles.length > 0 ? (
               joinedCircles.map(renderCircleRow)

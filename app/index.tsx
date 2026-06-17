@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
   StyleSheet,
@@ -62,9 +63,10 @@ const slides: OnboardingSlide[] = [
 function BrandMark() {
   return (
     <View style={styles.brandRow}>
-      <View style={styles.brandIcon}>
-        <Text style={styles.brandLetter}>M</Text>
-      </View>
+      <Image 
+        source={require('../assets/app-logo.png')} 
+        style={{ width: 42, height: 42, borderRadius: 8, resizeMode: 'contain' }} 
+      />
       <Text style={styles.brandName}>MboaPay</Text>
     </View>
   );

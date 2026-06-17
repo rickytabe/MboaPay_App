@@ -222,7 +222,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           <Ionicons
             name={isWalletFocused ? "wallet" : "wallet-outline"}
             size={44}
-            color={colors.onPrimary}
+            color={LIGHT_COLORS.onPrimary}
           />
         </TouchableOpacity>
       </Animated.View>
@@ -278,21 +278,21 @@ const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: colors.primaryContainer,
+    backgroundColor: LIGHT_COLORS.primaryContainer,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: colors.primary,
+    shadowColor: LIGHT_COLORS.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
     borderWidth: 3.5,
-    borderColor: colors.surface,
+    borderColor: LIGHT_COLORS.surface,
   },
   floatingButtonActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.surface,
-    shadowColor: colors.primaryContainer,
+    backgroundColor: LIGHT_COLORS.primary,
+    borderColor: LIGHT_COLORS.surface,
+    shadowColor: LIGHT_COLORS.primaryContainer,
     shadowOpacity: 0.4,
   },
 });

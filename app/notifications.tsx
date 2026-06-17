@@ -1,16 +1,18 @@
 import React from "react";
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../context/AppContext";
 import type { AppNotification } from "../context/types";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
+import { TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
 import Card from "../components/Card";
 
 export default function Notifications() {
   const router = useRouter();
-  const { notifications, markNotificationsAsRead } = useApp();
+  const { notifications, markNotificationsAsRead, colors: theme } = useApp();
+  const styles = getStyles(theme);
 
   const handleMarkAllRead = () => {
     markNotificationsAsRead();
@@ -19,19 +21,19 @@ export default function Notifications() {
   const getNotificationIcon = (type: string) => {
     switch (type) {
       case "deposit":
-        return { name: "arrow-down-circle-outline" as const, color: COLORS.secondary };
+        return { name: "arrow-down-circle-outline" as const, color: theme.secondary };
       case "withdrawal":
-        return { name: "arrow-up-circle-outline" as const, color: COLORS.onSurfaceVariant };
+        return { name: "arrow-up-circle-outline" as const, color: theme.onSurfaceVariant };
       case "tontine_due":
-        return { name: "alert-circle-outline" as const, color: COLORS.error };
+        return { name: "alert-circle-outline" as const, color: theme.error };
       case "tontine_payout":
-        return { name: "gift-outline" as const, color: COLORS.secondary };
+        return { name: "gift-outline" as const, color: theme.secondary };
       case "escrow_lock":
-        return { name: "lock-closed-outline" as const, color: COLORS.primary };
+        return { name: "lock-closed-outline" as const, color: theme.primary };
       case "escrow_release":
-        return { name: "lock-open-outline" as const, color: COLORS.secondary };
+        return { name: "lock-open-outline" as const, color: theme.secondary };
       default:
-        return { name: "notifications-outline" as const, color: COLORS.primary };
+        return { name: "notifications-outline" as const, color: theme.primary };
     }
   };
 
@@ -45,11 +47,11 @@ export default function Notifications() {
         </View>
         <View style={styles.contentSection}>
           <View style={styles.rowHeader}>
-            <Text style={styles.titleText}>{item.title}</Text>
+            <Text style={[styles.titleText, { color: theme.onSurface }]}>{item.title}</Text>
             {!item.read && <View style={styles.unreadDot} />}
           </View>
-          <Text style={styles.bodyText}>{item.message}</Text>
-          <Text style={styles.dateText}>{item.date}</Text>
+          <Text style={[styles.bodyText, { color: theme.onSurfaceVariant }]}>{item.message}</Text>
+          <Text style={[styles.dateText, { color: theme.onSurfaceVariant }]}>{item.date}</Text>
         </View>
       </View>
     );
@@ -58,7 +60,8 @@ export default function Notifications() {
   const hasUnread = notifications.some(n => !n.read);
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.contentContainer}>
       <TopNavBarComponent showBack title="Notifications" />
 
       <View style={styles.actionHeader}>
@@ -84,20 +87,21 @@ export default function Notifications() {
           ))
         ) : (
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={48} color={COLORS.outline} />
+            <Ionicons name="notifications-off-outline" size={48} color={theme.outline} />
             <Text style={styles.emptyTitle}>All caught up!</Text>
             <Text style={styles.emptySubtitle}>You have no new notifications at the moment.</Text>
           </View>
         )}
       </Card>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: typeof import("../constants/Theme").LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: theme.background,
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
@@ -113,7 +117,7 @@ const styles = StyleSheet.create({
   },
   subtext: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: theme.onSurfaceVariant,
     fontWeight: "600",
   },
   actions: {
@@ -123,10 +127,10 @@ const styles = StyleSheet.create({
   actionLink: {
     fontSize: 12,
     fontWeight: "700",
-    color: COLORS.primaryContainer,
+    color: theme.primaryContainer,
   },
   listCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: theme.surface,
   },
   notificationRow: {
     flexDirection: "row",
@@ -135,7 +139,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   unreadRow: {
-    backgroundColor: COLORS.primaryContainer + "06",
+    backgroundColor: theme.primaryContainer + "06",
   },
   iconContainer: {
     width: 38,
@@ -156,29 +160,29 @@ const styles = StyleSheet.create({
   titleText: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: theme.primary,
     flex: 1,
   },
   unreadDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: theme.secondary,
   },
   bodyText: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: theme.onSurfaceVariant,
     lineHeight: 16,
   },
   dateText: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: theme.onSurfaceVariant,
     fontWeight: "600",
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: theme.surfaceContainer,
   },
   emptyContainer: {
     padding: 50,
@@ -188,11 +192,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: theme.primary,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: COLORS.onSurfaceVariant,
+    color: theme.onSurfaceVariant,
     textAlign: "center",
     lineHeight: 18,
   },

@@ -1,6 +1,7 @@
 import React from "react";
 import { StyleSheet, View, ViewStyle } from "react-native";
-import { COLORS, ROUNDED, SPACING } from "../constants/Theme";
+import { ROUNDED, SPACING } from "../constants/Theme";
+import { useApp } from "../context/AppContext";
 
 interface CardProps {
   children: React.ReactNode;
@@ -15,18 +16,47 @@ export const Card = ({
   variant = "elevated",
   noPadding = false,
 }: CardProps) => {
+  const { colors } = useApp();
+
   const getCardStyle = () => {
     switch (variant) {
       case "flat":
-        return styles.flat;
+        return { backgroundColor: colors.surfaceContainer };
       case "elevated":
-        return styles.elevated;
+        return {
+          backgroundColor: colors.surface,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.12,
+          shadowRadius: 24,
+          elevation: 6,
+          borderWidth: 1,
+          borderColor: colors.surfaceContainerHigh,
+        };
       case "outlined":
-        return styles.outlined;
+        return {
+          backgroundColor: colors.surface,
+          borderWidth: 1.5,
+          borderColor: colors.outlineVariant,
+        };
       case "primary":
-        return styles.primary;
+        return {
+          backgroundColor: colors.primaryContainer,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 16,
+          elevation: 4,
+        };
       case "secondary":
-        return styles.secondary;
+        return {
+          backgroundColor: colors.secondary,
+          shadowColor: colors.secondary,
+          shadowOffset: { width: 0, height: 8 },
+          shadowOpacity: 0.2,
+          shadowRadius: 16,
+          elevation: 4,
+        };
     }
   };
 
@@ -46,44 +76,12 @@ export const Card = ({
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: ROUNDED.xl, // 24px as defined in shapes guidelines
-    padding: SPACING.md + 4, // ~20px padding
+    borderRadius: ROUNDED.xl,
+    padding: SPACING.md + 4,
     overflow: "hidden",
   },
   noPadding: {
     padding: 0,
-  },
-  flat: {
-    backgroundColor: COLORS.surfaceContainer,
-  },
-  elevated: {
-    backgroundColor: COLORS.surface,
-    shadowColor: "rgba(0, 17, 58, 0.08)", // sample Trust Blue for shadow tint
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.8,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  outlined: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
-  },
-  primary: {
-    backgroundColor: COLORS.primaryContainer,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  secondary: {
-    backgroundColor: COLORS.secondary,
-    shadowColor: COLORS.secondary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 4,
   },
 });
 

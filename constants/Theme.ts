@@ -48,7 +48,7 @@ export const DARK_COLORS = {
   surfaceContainerHigh: "#2b2e3a", // +8% over surfaceContainer — top-level elevation now visible
 
   // Text Colors
-  onPrimary: "#002d66",
+  onPrimary: "#98c1f6ff",
   onSecondary: "#003920",
   onBackground: "#e8e8ec", // bumped slightly for stronger contrast against background
   onSurface: "#e8e8ec",
