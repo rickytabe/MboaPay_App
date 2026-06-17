@@ -138,7 +138,7 @@ export const loadAppData = async (
   const { data: txData } = await supabase.from("transactions").select("*").order("created_at", { ascending: false });
   if (txData) setTransactions(txData.map(mapTransaction));
 
-  const { data: notifData } = await supabase.from("notifications").select("*").order("created_at", { ascending: false });
+  const { data: notifData } = await supabase.from("notifications").select("*").eq("user_id", currentUserId).order("created_at", { ascending: false });
   if (notifData) setNotifications(notifData.map(mapNotification));
 
   const { data: circlesData, error: circlesError } = await supabase.from("circles").select("*, circle_members(*, users(id, full_name))");
