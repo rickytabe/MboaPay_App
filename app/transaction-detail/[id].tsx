@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
 import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
+import { getTransactionStyle, getTransactionSubtitle } from "../../constants/TransactionVocabulary";
 
 export default function TransactionDetail() {
   const router = useRouter();
@@ -25,23 +26,9 @@ export default function TransactionDetail() {
     );
   }
 
-  const isInflow = ["top_up", "refund", "escrow_release", "transfer_in"].includes(transaction.type);
-  
-  const getIconData = (type: string) => {
-    switch (type) {
-      case "top_up": return { name: "arrow-up-outline" as const, color: COLORS.secondary };
-      case "contribution": return { name: "arrow-up-outline" as const, color: COLORS.onSurfaceVariant };
-      case "disbursement": return { name: "arrow-down-outline" as const, color: COLORS.secondary };
-      case "refund": return { name: "arrow-back-outline" as const, color: COLORS.secondary };
-      case "escrow_lock": return { name: "lock-closed-outline" as const, color: COLORS.primary };
-      case "escrow_release": return { name: "lock-open-outline" as const, color: COLORS.secondary };
-      case "transfer_in": return { name: "arrow-down-outline" as const, color: COLORS.secondary };
-      case "transfer_out": return { name: "arrow-up-outline" as const, color: COLORS.primary };
-      default: return { name: "swap-horizontal-outline" as const, color: COLORS.onSurfaceVariant };
-    }
-  };
-
-  const icon = getIconData(transaction.type);
+  const styleInfo = getTransactionStyle(transaction.type);
+  const sub = getTransactionSubtitle(transaction);
+  const isInflow = styleInfo.isCredit;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -49,10 +36,10 @@ export default function TransactionDetail() {
       
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerCard}>
-          <View style={[styles.iconContainer, { backgroundColor: icon.color + "15" }]}>
-            <Ionicons name={icon.name} size={32} color={icon.color} />
+          <View style={[styles.iconContainer, { backgroundColor: styleInfo.bgColor }]}>
+            <Ionicons name={styleInfo.ionicIcon} size={32} color={styleInfo.color} />
           </View>
-          <Text style={styles.title}>{transaction.title}</Text>
+          <Text style={styles.title}>{styleInfo.title}</Text>
           <Text style={[styles.amount, isInflow ? styles.txPositive : styles.txNegative]}>
             {isInflow ? "+" : "-"} {transaction.amount.toLocaleString()} XAF
           </Text>
@@ -80,7 +67,7 @@ export default function TransactionDetail() {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Type</Text>
-            <Text style={styles.detailValue}>{transaction.type.replace('_', ' ').toUpperCase()}</Text>
+            <Text style={styles.detailValue}>{styleInfo.title}</Text>
           </View>
           <View style={styles.divider} />
 
@@ -109,10 +96,10 @@ export default function TransactionDetail() {
               <Text style={styles.detailLabel}>Description</Text>
               <Text style={styles.detailValue}>{transaction.metadata.note}</Text>
             </View>
-          ) : transaction.subtitle ? (
+          ) : sub ? (
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Summary</Text>
-              <Text style={styles.detailValue}>{transaction.subtitle}</Text>
+              <Text style={styles.detailValue}>{sub}</Text>
             </View>
           ) : null}
         </View>

@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useApp } from "../context/AppContext";
-import { COLORS, SPACING } from "../constants/Theme";
+import { LIGHT_COLORS, SPACING } from "../constants/Theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../components/Button";
 import { useToast } from "../context/ToastContext";
@@ -21,8 +21,9 @@ const COUNTDOWN_SECONDS = 30;
 export default function ResetOtpVerification() {
   const router = useRouter();
   const params = useLocalSearchParams<{ email: string }>();
-  const { verifyPasswordResetOtp, requestPasswordReset } = useApp();
+  const { verifyPasswordResetOtp, requestPasswordReset, colors } = useApp();
   const toast = useToast();
+  const styles = getStyles(colors);
 
   const email = params.email || "";
   const maskedEmail = email
@@ -177,7 +178,7 @@ export default function ResetOtpVerification() {
           onPress={() => router.back()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Verify Reset Code</Text>
         <View style={styles.headerSpacer} />
@@ -185,7 +186,7 @@ export default function ResetOtpVerification() {
 
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Ionicons name="key-outline" size={48} color={COLORS.primary} />
+          <Ionicons name="key-outline" size={48} color={colors.primary} />
         </View>
 
         <Text style={styles.title}>Enter OTP</Text>
@@ -219,7 +220,7 @@ export default function ResetOtpVerification() {
 
         {error ? (
           <View style={styles.errorRow}>
-            <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+            <Ionicons name="alert-circle" size={14} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -255,10 +256,10 @@ export default function ResetOtpVerification() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     paddingHorizontal: SPACING.containerPadding,
     paddingTop: 56,
   },
@@ -271,16 +272,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: COLORS.primary },
+  headerTitle: { fontSize: 17, fontWeight: "800", color: colors.primary },
   headerSpacer: { width: 44, height: 44 },
   content: {
     flex: 1,
@@ -291,7 +292,7 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: COLORS.primaryContainer + "20",
+    backgroundColor: colors.primaryContainer + "20",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 24,
@@ -299,19 +300,19 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: "900",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 8,
   },
   subtitle: {
     fontSize: 15,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     textAlign: "center",
     lineHeight: 22,
   },
   emailText: {
     fontSize: 15,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 32,
     marginTop: 4,
   },
@@ -326,24 +327,24 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 14,
     borderWidth: 2,
-    borderColor: COLORS.outlineVariant,
-    backgroundColor: COLORS.surface,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surface,
     textAlign: "center",
     fontSize: 24,
     fontWeight: "800",
-    color: COLORS.primary,
-    shadowColor: COLORS.primary,
+    color: colors.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
     shadowRadius: 4,
     elevation: 1,
   },
   otpBoxFilled: {
-    borderColor: COLORS.primaryContainer,
-    backgroundColor: COLORS.primaryContainer + "10",
+    borderColor: colors.primaryContainer,
+    backgroundColor: colors.primaryContainer + "10",
   },
   otpBoxError: {
-    borderColor: COLORS.error,
+    borderColor: colors.error,
   },
   errorRow: {
     flexDirection: "row",
@@ -351,18 +352,18 @@ const styles = StyleSheet.create({
     gap: 6,
     marginTop: 8,
   },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: "600" },
+  errorText: { color: colors.error, fontSize: 13, fontWeight: "600" },
   resendButton: {
     marginTop: 24,
     padding: 8,
   },
   resendText: {
     fontSize: 14,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
   },
   resendLink: {
     fontWeight: "700",
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
   },
   resendButtonDisabled: {
     opacity: 0.5,

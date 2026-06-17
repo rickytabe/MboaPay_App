@@ -10,14 +10,19 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS } from "../constants/Theme";
+import { LIGHT_COLORS } from "../constants/Theme";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
+import { Image } from "react-native";
+import { useApp } from "../context/AppContext";
+import InitialsAvatar from "./InitialsAvatar";
 
 const { width } = Dimensions.get("window");
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { user, colors, theme } = useApp();
+  const styles = getStyles(colors);
   
   const TAB_BAR_HEIGHT = 65;
   // Add 30px of extra height at the top for the elevated button container
@@ -115,8 +120,8 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
       {/* Custom SVG Background */}
       <View style={StyleSheet.absoluteFill}>
         <Svg width={width} height={containerHeight}>
-          <Path d={dBackground} fill={COLORS.surface} />
-          <Path d={dBorder} fill="none" stroke={COLORS.outlineVariant} strokeWidth={1.2} />
+          <Path d={dBackground} fill={colors.surface} />
+          <Path d={dBorder} fill="none" stroke={colors.outlineVariant} strokeWidth={1.2} />
         </Svg>
       </View>
 
@@ -166,16 +171,29 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               style={styles.tabItem}
             >
               <Animated.View style={{ transform: [{ scale: tabScales[index] }] }}>
-                <Ionicons
-                  name={iconName}
-                  size={23}
-                  color={isFocused ? COLORS.primaryContainer : COLORS.onSurfaceVariant}
-                />
+                {route.name === "profile" ? (
+                  <View style={[
+                    { width: 28, height: 28, borderRadius: 14, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+                    isFocused && { borderWidth: 2, borderColor: colors.primaryContainer }
+                  ]}>
+                    {user?.avatarUrl ? (
+                      <Image source={{ uri: user.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                    ) : (
+                      <InitialsAvatar name={user?.name || ""} size={isFocused ? 24 : 28} />
+                    )}
+                  </View>
+                ) : (
+                  <Ionicons
+                    name={iconName}
+                    size={23}
+                    color={isFocused ? colors.primaryContainer : colors.onSurfaceVariant}
+                  />
+                )}
               </Animated.View>
               <Text
                 style={[
                   styles.tabLabel,
-                  { color: isFocused ? COLORS.primaryContainer : COLORS.onSurfaceVariant },
+                  { color: isFocused ? colors.primaryContainer : colors.onSurfaceVariant },
                 ]}
               >
                 {label}
@@ -204,7 +222,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
           <Ionicons
             name={isWalletFocused ? "wallet" : "wallet-outline"}
             size={44}
-            color={COLORS.onPrimary}
+            color={colors.onPrimary}
           />
         </TouchableOpacity>
       </Animated.View>
@@ -212,7 +230,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     position: "absolute",
     bottom: 0,
@@ -260,21 +278,21 @@ const styles = StyleSheet.create({
     width: 84,
     height: 84,
     borderRadius: 42,
-    backgroundColor: COLORS.primaryContainer,
+    backgroundColor: colors.primaryContainer,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 5,
     borderWidth: 3.5,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
   },
   floatingButtonActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.surface,
-    shadowColor: COLORS.primaryContainer,
+    backgroundColor: colors.primary,
+    borderColor: colors.surface,
+    shadowColor: colors.primaryContainer,
     shadowOpacity: 0.4,
   },
 });

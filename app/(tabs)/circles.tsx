@@ -4,14 +4,16 @@ import React, { useState } from "react";
 import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
+import InitialsAvatar from "../../components/InitialsAvatar";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
-import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
+import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Circle } from "../../context/types";
 
 export default function Circles() {
   const router = useRouter();
-  const { circles, joinCircleByCode } = useApp();
+  const { circles, joinCircleByCode, colors, theme } = useApp();
+  const styles = getStyles(colors);
   const [activeTab, setActiveTab] = useState<"joined" | "explore">("joined");
   const [joiningId, setJoiningId] = useState<string | null>(null);
 
@@ -102,15 +104,20 @@ export default function Circles() {
 
           <View style={styles.cardFooter}>
             <Text style={styles.payoutTimeline}>
-              <Ionicons name="time-outline" size={13} color={COLORS.secondary} /> {circle.nextPayoutDate}
+              <Ionicons name="time-outline" size={13} color={colors.secondary} /> {circle.nextPayoutDate}
             </Text>
             <View style={styles.avatarsList}>
               {circle.members.slice(0, 3).map((m, idx) => (
-                <Image
-                  key={idx}
-                  source={{ uri: m.avatar }}
-                  style={[styles.memberAvatar, { marginLeft: idx > 0 ? -10 : 0 }]}
-                />
+                <View key={idx} style={{ marginLeft: idx > 0 ? -10 : 0 }}>
+                  {m.avatar ? (
+                    <Image
+                      source={{ uri: m.avatar }}
+                      style={styles.memberAvatar}
+                    />
+                  ) : (
+                    <InitialsAvatar name={m.name} size={24} />
+                  )}
+                </View>
               ))}
               {circle.membersCount > 3 && (
                 <View style={styles.moreAvatarsBadge}>
@@ -125,8 +132,7 @@ export default function Circles() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <SafeAreaView>
+    <SafeAreaView style={styles.container}><ScrollView contentContainerStyle={styles.contentContainer}>
         <TopNavBarComponent title="Savings Circles" tabName="Circles" />
 
         {/* Intro Cards */}
@@ -171,7 +177,7 @@ export default function Circles() {
               joinedCircles.map(renderCircleRow)
             ) : (
               <View style={styles.emptyContainer}>
-                <Ionicons name="people-outline" size={48} color={COLORS.outline} />
+                <Ionicons name="people-outline" size={48} color={colors.outline} />
                 <Text style={styles.emptyTitle}>No circles joined</Text>
                 <Text style={styles.emptySubtitle}>Create your own savings circle or join one using an invite code.</Text>
               </View>
@@ -208,26 +214,25 @@ export default function Circles() {
               ))
             ) : (
               <View style={styles.emptyContainer}>
-                <Ionicons name="search-outline" size={48} color={COLORS.outline} />
+                <Ionicons name="search-outline" size={48} color={colors.outline} />
                 <Text style={styles.emptyTitle}>No public circles found</Text>
                 <Text style={styles.emptySubtitle}>There are currently no public savings groups available to join.</Text>
               </View>
             )}
           </View>
         )}
-      </SafeAreaView>
-    </ScrollView>
+      </ScrollView></SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
-    paddingBottom: 30,
+    paddingBottom: 110,
   },
   actionHeaderCards: {
     flexDirection: "row",
@@ -256,7 +261,7 @@ const styles = StyleSheet.create({
   },
   tabsContainer: {
     flexDirection: "row",
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.surfaceContainer,
     borderRadius: ROUNDED.md,
     padding: 3,
     marginBottom: 20,
@@ -268,21 +273,21 @@ const styles = StyleSheet.create({
     borderRadius: ROUNDED.default,
   },
   tabButtonActive: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   tabText: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
   },
   tabTextActive: {
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
   },
   listSection: {
     gap: 16,
   },
   circleRowCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     gap: 16,
   },
   cardHeader: {
@@ -298,15 +303,15 @@ const styles = StyleSheet.create({
   typeBadgeText: {
     fontSize: 9,
     fontWeight: "800",
-    color: COLORS.onSurfaceVariant,
-    backgroundColor: COLORS.surfaceContainer,
+    color: colors.onSurfaceVariant,
+    backgroundColor: colors.surfaceContainer,
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: ROUNDED.sm,
     letterSpacing: 0.5,
   },
   treasurerBadge: {
-    backgroundColor: COLORS.primaryContainer + "12",
+    backgroundColor: colors.primaryContainer + "12",
     paddingVertical: 2,
     paddingHorizontal: 6,
     borderRadius: ROUNDED.sm,
@@ -314,22 +319,22 @@ const styles = StyleSheet.create({
   treasurerBadgeText: {
     fontSize: 9,
     fontWeight: "800",
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
   },
   circleName: {
     fontSize: 17,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
     marginTop: 6,
   },
   circleCode: {
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     marginTop: 2,
     fontWeight: "500",
   },
   dueBadge: {
-    backgroundColor: COLORS.error + "15",
+    backgroundColor: colors.error + "15",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: ROUNDED.full,
@@ -337,10 +342,10 @@ const styles = StyleSheet.create({
   dueText: {
     fontSize: 11,
     fontWeight: "700",
-    color: COLORS.error,
+    color: colors.error,
   },
   paidBadge: {
-    backgroundColor: COLORS.secondary + "15",
+    backgroundColor: colors.secondary + "15",
     paddingVertical: 4,
     paddingHorizontal: 10,
     borderRadius: ROUNDED.full,
@@ -348,12 +353,12 @@ const styles = StyleSheet.create({
   paidText: {
     fontSize: 11,
     fontWeight: "700",
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   cardStats: {
     flexDirection: "row",
     justifyContent: "space-between",
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.surfaceContainer,
     padding: 12,
     borderRadius: ROUNDED.md,
   },
@@ -362,13 +367,13 @@ const styles = StyleSheet.create({
   },
   statLabel: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   statValue: {
     fontSize: 12,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   cardFooter: {
     flexDirection: "row",
@@ -377,7 +382,7 @@ const styles = StyleSheet.create({
   },
   payoutTimeline: {
     fontSize: 12,
-    color: COLORS.secondary,
+    color: colors.secondary,
     fontWeight: "700",
     flexDirection: "row",
     alignItems: "center",
@@ -391,15 +396,15 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
   },
   moreAvatarsBadge: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.surfaceContainer,
     borderWidth: 1.5,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     marginLeft: -10,
@@ -407,7 +412,7 @@ const styles = StyleSheet.create({
   moreAvatarsText: {
     fontSize: 9,
     fontWeight: "700",
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
   },
   emptyContainer: {
     padding: 40,
@@ -417,11 +422,11 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   emptySubtitle: {
     fontSize: 13,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     textAlign: "center",
     lineHeight: 18,
   },
@@ -429,7 +434,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   exploreCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     gap: 12,
   },
   exploreHeader: {
@@ -440,16 +445,16 @@ const styles = StyleSheet.create({
   joinText: {
     fontSize: 11,
     fontWeight: "700",
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   exploreName: {
     fontSize: 15,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   exploreDesc: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     lineHeight: 18,
   },
   exploreFooter: {
@@ -460,11 +465,11 @@ const styles = StyleSheet.create({
   },
   exploreStats: {
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   exploreJoinButton: {
-    backgroundColor: COLORS.primaryContainer,
+    backgroundColor: colors.primaryContainer,
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: ROUNDED.default,
@@ -475,3 +480,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

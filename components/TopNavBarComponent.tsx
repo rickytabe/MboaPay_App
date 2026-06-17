@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { COLORS, TYPOGRAPHY } from "../constants/Theme";
+import { LIGHT_COLORS, TYPOGRAPHY } from "../constants/Theme";
 import { useApp } from "../context/AppContext";
+import InitialsAvatar from "./InitialsAvatar";
 
 interface TopNavProps {
   title?: string;
@@ -19,7 +20,8 @@ export const TopNavBarComponent = ({
   showNotifications = true,
 }: TopNavProps) => {
   const router = useRouter();
-  const { user, notifications } = useApp();
+  const { user, notifications, colors } = useApp();
+  const styles = getStyles(colors);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -31,23 +33,27 @@ export const TopNavBarComponent = ({
             style={styles.iconButton}
             onPress={() => router.back()}
           >
-            <Ionicons name="arrow-back" size={24} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
             style={styles.avatarButton}
             onPress={() => router.push("/profile")}
           >
-            <Image
-              source={{ uri: user.avatarUrl || "https://i.pravatar.cc/150" }}
-              style={styles.avatarImage}
-            />
+            {user.avatarUrl ? (
+              <Image
+                source={{ uri: user.avatarUrl }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <InitialsAvatar name={user.name} size={37} />
+            )}
           </TouchableOpacity>
         )}
 
         <Text style={styles.headerTitle} numberOfLines={1}>
           {/* {showBack ? title : (user.name ? `Hello, ${user.name.split(" ")[0]}` : title)} */}
-          {tabName}
+          {tabName || title}
         </Text>
       </View>
 
@@ -56,7 +62,7 @@ export const TopNavBarComponent = ({
           style={styles.notificationButton}
           onPress={() => router.push("/notifications")}
         >
-          <Ionicons name="notifications-outline" size={24} color={COLORS.primary} />
+          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount}</Text>
@@ -68,7 +74,7 @@ export const TopNavBarComponent = ({
   );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   headerContainer: {
     height: 56,
     flexDirection: "row",
@@ -89,8 +95,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     overflow: "hidden",
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryContainer,
+    justifyContent: "center",
+    alignItems: "center",
   },
   avatarImage: {
     width: "100%",
@@ -102,19 +108,19 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.headlineMd.fontSize,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.onBackground,
     flex: 1,
   },
   notificationButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
@@ -123,7 +129,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 6,
     right: 6,
-    backgroundColor: COLORS.error,
+    backgroundColor: colors.error,
     borderRadius: 8,
     minWidth: 16,
     height: 16,
@@ -131,7 +137,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 4,
     borderWidth: 1.5,
-    borderColor: COLORS.surface,
+    borderColor: colors.surface,
   },
   badgeText: {
     color: "#ffffff",

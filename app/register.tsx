@@ -13,15 +13,16 @@ import {
   View,
 } from "react-native";
 import { Button } from "../components/Button";
-import { COLORS, SPACING } from "../constants/Theme";
+import { LIGHT_COLORS, SPACING } from "../constants/Theme";
 import { useApp } from "../context/AppContext";
 import { useToast } from "../context/ToastContext";
 import { getErrorMessage } from "../lib/errors";
 
 export default function Register() {
   const router = useRouter();
-  const { registerWithEmail } = useApp();
+  const { registerWithEmail, colors } = useApp();
   const toast = useToast();
+  const styles = getStyles(colors);
   
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -200,7 +201,7 @@ export default function Register() {
 
   const borderColor = borderAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.outlineVariant, COLORS.primaryContainer],
+    outputRange: [colors.outlineVariant, colors.primaryContainer],
   });
 
   const isValid = fullName.trim().length > 0 && phone.length === 9 && email.length > 3 && password.length >= 6;
@@ -209,7 +210,7 @@ export default function Register() {
     <Animated.View style={[styles.container, { opacity: fadeIn }]}>
         <View style={styles.header}>
           <TouchableOpacity style={styles.backButton} onPress={() => router.back()} activeOpacity={0.7}>
-            <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+            <Ionicons name="arrow-back" size={22} color={colors.primary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Account</Text>
           <View style={styles.headerSpacer} />
@@ -236,7 +237,7 @@ export default function Register() {
               <TextInput
                 style={styles.standardInput}
                 placeholder="e.g. John Doe"
-                placeholderTextColor={COLORS.outline}
+                placeholderTextColor={colors.outline}
                 value={fullName}
                 onChangeText={setFullName}
                 autoCapitalize="words"
@@ -249,7 +250,7 @@ export default function Register() {
               <TextInput
                 style={styles.standardInput}
                 placeholder="you@example.com"
-                placeholderTextColor={COLORS.outline}
+                placeholderTextColor={colors.outline}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -264,7 +265,7 @@ export default function Register() {
                 <TextInput
                   style={styles.passwordInput}
                   placeholder="••••••••"
-                  placeholderTextColor={COLORS.outline}
+                  placeholderTextColor={colors.outline}
                   value={password}
                   onChangeText={setPassword}
                   secureTextEntry={!showPassword}
@@ -277,7 +278,7 @@ export default function Register() {
                   <Ionicons 
                     name={showPassword ? "eye-off-outline" : "eye-outline"} 
                     size={22} 
-                    color={COLORS.onSurfaceVariant} 
+                    color={colors.onSurfaceVariant} 
                   />
                 </TouchableOpacity>
               </View>
@@ -291,7 +292,7 @@ export default function Register() {
                 score = Math.min(score, 4);
 
                 const strengthLabels = ["Very Weak", "Weak", "Fair", "Good", "Strong"];
-                const strengthColors = [COLORS.error, COLORS.error, COLORS.orange, COLORS.secondary, COLORS.primary];
+                const strengthColors = [colors.error, colors.error, colors.orange || "#F59E0B", colors.secondary, colors.primary];
                 
                 return (
                   <View style={styles.strengthContainer}>
@@ -317,7 +318,7 @@ export default function Register() {
             {/* Mobile Money Number Input */}
             <Text style={styles.label}>Mobile Money Number</Text>
             <TouchableOpacity activeOpacity={1} onPress={() => inputRef.current?.focus()}>
-              <Animated.View style={[styles.inputCard, { borderColor: error ? COLORS.error : borderColor }]}>
+              <Animated.View style={[styles.inputCard, { borderColor: error ? colors.error : borderColor }]}>
                 <View style={styles.countrySection}>
                   <Text style={styles.flag}>🇨🇲</Text>
                   <Text style={styles.countryCode}>+237</Text>
@@ -336,7 +337,7 @@ export default function Register() {
                 {phone.length === 9 && (
                   <View style={styles.checkCircle}>
                     {isFetchingProvider ? (
-                      <Ionicons name="sync" size={16} color={COLORS.onPrimary} style={{ transform: [{ rotate: "180deg" }] }} />
+                      <Ionicons name="sync" size={16} color={colors.onPrimary} style={{ transform: [{ rotate: "180deg" }] }} />
                     ) : currentProvider === "MTN" ? (
                       <Image 
                         source={{ uri: "https://i.pinimg.com/1200x/02/cb/c3/02cbc305b506ea1ffcd73028d59df80b.jpg" }} 
@@ -350,7 +351,7 @@ export default function Register() {
                         resizeMode="contain" 
                       />
                     ) : (
-                      <Ionicons name="checkmark" size={16} color={COLORS.onPrimary} />
+                      <Ionicons name="checkmark" size={16} color={colors.onPrimary} />
                     )}
                   </View>
                 )}
@@ -371,7 +372,7 @@ export default function Register() {
 
           {error ? (
             <View style={styles.errorRow}>
-              <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+              <Ionicons name="alert-circle" size={14} color={colors.error} />
               <Text style={styles.errorText}>{error}</Text>
             </View>
           ) : null}
@@ -400,40 +401,41 @@ export default function Register() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     paddingHorizontal: SPACING.containerPadding,
     paddingTop: 56,
   },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: COLORS.surface, justifyContent: "center", alignItems: "center", shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
-  headerTitle: { fontSize: 17, fontWeight: "800", color: COLORS.primary },
+  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surface, justifyContent: "center", alignItems: "center", shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 4, elevation: 2 },
+  headerTitle: { fontSize: 17, fontWeight: "800", color: colors.primary },
   headerSpacer: { width: 44, height: 44 },
   contentScroller: { flex: 1, marginTop: 32 },
   content: { flexGrow: 1 },
-  title: { fontSize: 30, fontWeight: "900", color: COLORS.primary, lineHeight: 38, letterSpacing: -0.6, marginBottom: 10 },
-  subtitle: { fontSize: 15, color: COLORS.onSurfaceVariant, lineHeight: 22, marginBottom: 24 },
+  title: { fontSize: 30, fontWeight: "900", color: colors.primary, lineHeight: 38, letterSpacing: -0.6, marginBottom: 10 },
+  subtitle: { fontSize: 15, color: colors.onSurfaceVariant, lineHeight: 22, marginBottom: 24 },
   
   inputContainer: { marginBottom: 16 },
-  label: { fontSize: 14, fontWeight: "600", color: COLORS.primary, marginBottom: 8 },
-  standardInput: { height: 56, backgroundColor: COLORS.surface, borderRadius: 16, paddingHorizontal: 16, fontSize: 16, borderWidth: 1, borderColor: COLORS.outlineVariant },
+  label: { fontSize: 14, fontWeight: "600", color: colors.primary, marginBottom: 8 },
+  standardInput: { height: 56, backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, fontSize: 16, borderWidth: 1, borderColor: colors.outlineVariant, color: colors.onBackground },
 
   passwordWrapper: {
     flexDirection: "row",
     alignItems: "center",
     height: 56,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
+    borderColor: colors.outlineVariant,
   },
   passwordInput: {
     flex: 1,
     height: "100%",
     paddingHorizontal: 16,
     fontSize: 16,
+    color: colors.onBackground,
   },
   eyeButton: {
     padding: 16,
@@ -450,7 +452,7 @@ const styles = StyleSheet.create({
   strengthBarBackground: {
     flex: 1,
     height: 6,
-    backgroundColor: COLORS.outlineVariant,
+    backgroundColor: colors.outlineVariant,
     borderRadius: 3,
     marginRight: 12,
     overflow: "hidden",
@@ -464,23 +466,23 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 
-  inputCard: { flexDirection: "row", alignItems: "center", height: 64, backgroundColor: COLORS.surface, borderRadius: 16, borderWidth: 2, paddingHorizontal: 16, shadowColor: COLORS.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 },
+  inputCard: { flexDirection: "row", alignItems: "center", height: 64, backgroundColor: colors.surface, borderRadius: 16, borderWidth: 2, paddingHorizontal: 16, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12, elevation: 3 },
   countrySection: { flexDirection: "row", alignItems: "center", marginRight: 4 },
   flag: { fontSize: 22, marginRight: 6 },
-  countryCode: { fontSize: 18, fontWeight: "800", color: COLORS.primary, marginRight: 12 },
-  divider: { width: 1.5, height: 28, backgroundColor: COLORS.outlineVariant, marginRight: 12 },
+  countryCode: { fontSize: 18, fontWeight: "800", color: colors.primary, marginRight: 12 },
+  divider: { width: 1.5, height: 28, backgroundColor: colors.outlineVariant, marginRight: 12 },
   phoneSection: { flex: 1, justifyContent: "center" },
-  placeholder: { fontSize: 18, fontWeight: "600", color: COLORS.outline, letterSpacing: 1 },
-  phoneDisplay: { fontSize: 20, fontWeight: "800", color: COLORS.primary, letterSpacing: 1.5 },
-  cursor: { color: COLORS.primaryContainer, fontWeight: "300" },
-  checkCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: COLORS.secondaryContainer, justifyContent: "center", alignItems: "center", overflow: 'hidden' },
+  placeholder: { fontSize: 18, fontWeight: "600", color: colors.outline, letterSpacing: 1 },
+  phoneDisplay: { fontSize: 20, fontWeight: "800", color: colors.primary, letterSpacing: 1.5 },
+  cursor: { color: colors.primaryContainer, fontWeight: "300" },
+  checkCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: colors.secondaryContainer, justifyContent: "center", alignItems: "center", overflow: 'hidden' },
   providerLogo: { width: 34, height: 34, borderRadius: 17 },
-  hiddenInput: { position: "absolute", opacity: 0, height: 0, width: 0 },
+  hiddenInput: { position: "absolute", opacity: 0, height: 0, width: 0, color: colors.onBackground },
   
   errorRow: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 10, paddingLeft: 4 },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: "600" },
+  errorText: { color: colors.error, fontSize: 13, fontWeight: "600" },
   bottomSection: { position: "absolute", left: SPACING.containerPadding, right: SPACING.containerPadding, alignItems: "center", gap: 16 },
   signinRow: { flexDirection: "row", alignItems: "center" },
-  signinLabel: { fontSize: 14, color: COLORS.onSurfaceVariant },
-  signinLink: { fontSize: 14, fontWeight: "700", color: COLORS.primaryContainer },
+  signinLabel: { fontSize: 14, color: colors.onSurfaceVariant },
+  signinLink: { fontSize: 14, fontWeight: "700", color: colors.primaryContainer },
 });

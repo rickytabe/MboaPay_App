@@ -1,16 +1,16 @@
+import { Ionicons } from '@expo/vector-icons';
 import * as Contacts from 'expo-contacts';
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View, ScrollView } from "react-native";
+import { Alert, FlatList, Image, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import Card from "../components/Card";
+import InlineUserSearch from "../components/InlineUserSearch";
 import TopNavBarComponent from "../components/TopNavBarComponent";
-import UserSearchModal from "../components/UserSearchModal";
 import { COLORS, ROUNDED, SPACING } from "../constants/Theme";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
-import { Ionicons } from '@expo/vector-icons';
 
 export default function Send() {
   const router = useRouter();
@@ -19,7 +19,6 @@ export default function Send() {
   const [phone, setPhone] = useState("");
   const [recipientName, setRecipientName] = useState("");
   const [note, setNote] = useState("");
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [detectedOperator, setDetectedOperator] = useState<"MTN" | "Orange" | null>(null);
 
@@ -206,22 +205,25 @@ export default function Send() {
                   />
               </View>
 
+              <View style={{ zIndex: 10 }}>
+                  <InlineUserSearch 
+                      placeholder="Search receiver by Name..."
+                      onSelectUser={(u) => {
+                          setPhone(u.phone.replace('+237', ''));
+                          setRecipientName(u.full_name);
+                      }} 
+                  />
+              </View>
+
               {/* Phone Input */}
               <View style={styles.inputContainer}>
                   <View style={styles.labelRow}>
                       <Text style={styles.label}>Recipient Phone Number</Text>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity onPress={() => setSearchModalVisible(true)} style={styles.contactsButton}>
-                              <Ionicons name="search" size={14} color={COLORS.primary} style={{marginRight: 4}} />
-                              <Text style={styles.contactsButtonText}>Search Directory</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={openContacts} style={styles.contactsButton}>
-                              <Ionicons name="people" size={14} color={COLORS.primary} style={{marginRight: 4}} />
-                              <Text style={styles.contactsButtonText}>Contacts</Text>
-                          </TouchableOpacity>
-                      </View>
                   </View>
                   <View style={styles.inputCard}> 
+                      <View style={{ paddingHorizontal: 12, borderRightWidth: 1, borderRightColor: COLORS.surfaceContainer, marginRight: 8, height: '100%', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.onSurfaceVariant }}>+237</Text>
+                      </View>
                       <TextInput
                               style={styles.inputInCard}
                               keyboardType="phone-pad"
@@ -282,15 +284,6 @@ export default function Send() {
 
           </ScrollView>
       </KeyboardAvoidingView>
-      <UserSearchModal
-        visible={searchModalVisible}
-        onClose={() => setSearchModalVisible(false)}
-        onSelectUser={(u: any) => {
-          setPhone(u.phone.replace('+237', ''));
-          setRecipientName(u.full_name);
-          setSearchModalVisible(false);
-        }}
-      />
 
       {/* Contacts Modal */}
       <Modal visible={contactsModalVisible} animationType="slide" transparent={true}>
@@ -389,6 +382,7 @@ const styles = StyleSheet.create({
       fontSize: 13,
       fontWeight: "700",
       color: COLORS.primary,
+      marginBottom: 12,
   },
   detectedOperator: {
       fontSize: 12,
@@ -411,15 +405,17 @@ const styles = StyleSheet.create({
   input: {
       backgroundColor: COLORS.surface,
       borderRadius: ROUNDED.md,
+      borderWidth: 1,
+      borderColor: COLORS.outline,
       paddingHorizontal: 16,
       paddingVertical: 14,
       fontSize: 16,
       color: COLORS.primary,
       fontWeight: '600',
   },
-  inputCard: { flexDirection: 'row', alignItems: 'center', height: 56, backgroundColor: COLORS.surface, borderRadius: ROUNDED.md, borderWidth: 1, borderColor: COLORS.outlineVariant, paddingHorizontal: 12 },
+  inputCard: { flexDirection: 'row', alignItems: 'center', height: 56, backgroundColor: COLORS.surface, borderRadius: ROUNDED.md, borderWidth: 1, borderColor: COLORS.outline, paddingHorizontal: 12 },
   inputInCard: { flex: 1, fontSize: 16, color: COLORS.primary, paddingVertical: 10 },
-  checkCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.secondaryContainer, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+  checkCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'transparent', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
   contactsButton: {
       backgroundColor: COLORS.surfaceContainer,
       paddingHorizontal: 8,

@@ -8,11 +8,14 @@ import { Alert, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Button from "../components/Button";
 import Card from "../components/Card";
-import { COLORS, ROUNDED, SPACING, TYPOGRAPHY } from "../constants/Theme";
+import { LIGHT_COLORS, ROUNDED, SPACING, TYPOGRAPHY } from "../constants/Theme";
+import { useApp } from "../context/AppContext";
 
 export default function TransactionReceipt() {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const { colors } = useApp();
+  const styles = getStyles(colors);
 
   const amount = parseFloat(params.amount as string);
   const operator = params.operator as string;
@@ -25,7 +28,7 @@ export default function TransactionReceipt() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `MboaPay Receipt:\nStatus: Success\nTransaction: ${title}\nAmount: ${amount.toLocaleString()} XAF\nRecipient: ${displayRecipient}\nOperator: ${operator}\nTx ID: ${txId}`,
+        message: `MboaPay Receipt:\nStatus: Success\nTransaction: ${title}\nAmount: ${amount.toLocaleString()} XAF\nRecipient Name: ${recipientName || 'N/A'}\nRecipient Phone: ${recipientPhone || 'N/A'}\nOperator: ${operator}\nTx ID: ${txId}`,
       });
     } catch (e) {
       console.log(e);
@@ -64,7 +67,9 @@ export default function TransactionReceipt() {
       y -= 20;
       page.drawText(`Amount: ${amount.toLocaleString()} XAF`, { x: leftX, y, size: regularSize, font });
       y -= 20;
-      page.drawText(`Recipient: ${displayRecipient}`, { x: leftX, y, size: regularSize, font });
+      page.drawText(`Recipient Name: ${recipientName || 'N/A'}`, { x: leftX, y, size: regularSize, font });
+      y -= 20;
+      page.drawText(`Recipient Phone: ${recipientPhone || 'N/A'}`, { x: leftX, y, size: regularSize, font });
       y -= 20;
       page.drawText(`Operator: ${operator === "MTN" ? "MTN MoMo" : "Orange Money"}`, { x: leftX, y, size: regularSize, font });
       y -= 20;
@@ -133,6 +138,16 @@ export default function TransactionReceipt() {
           </View>
 
           <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Recipient Name</Text>
+            <Text style={styles.detailValue}>{recipientName || "N/A"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Recipient Phone</Text>
+            <Text style={styles.detailValue}>{recipientPhone || "N/A"}</Text>
+          </View>
+
+          <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Date &amp; Time</Text>
             <Text style={styles.detailValue}>{dateStr}</Text>
           </View>
@@ -174,10 +189,10 @@ export default function TransactionReceipt() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     justifyContent: "space-between",
   },
   content: {
@@ -192,7 +207,7 @@ const styles = StyleSheet.create({
     width: 90,
     height: 90,
     borderRadius: 45,
-    backgroundColor: COLORS.secondary + "20",
+    backgroundColor: colors.secondary + "20",
     justifyContent: "center",
     alignItems: "center",
   },
@@ -200,26 +215,26 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: COLORS.secondary,
+    backgroundColor: colors.secondary,
     justifyContent: "center",
     alignItems: "center",
   },
   title: {
     fontSize: TYPOGRAPHY.headlineLg.fontSize,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 4,
     textAlign: "center",
   },
   subtitle: {
     fontSize: TYPOGRAPHY.bodyMd.fontSize,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     textAlign: "center",
     marginBottom: 32,
   },
   receiptCard: {
     width: "100%",
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     padding: 20,
     gap: 14,
   },
@@ -229,14 +244,14 @@ const styles = StyleSheet.create({
   },
   amountLabel: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
     marginBottom: 4,
   },
   amountValue: {
     fontSize: 30,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   detailRow: {
     flexDirection: "row",
@@ -245,21 +260,21 @@ const styles = StyleSheet.create({
   },
   detailLabel: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   detailValue: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   detailValueGreen: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   statusBadge: {
-    backgroundColor: COLORS.secondary + "15",
+    backgroundColor: colors.secondary + "15",
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: ROUNDED.sm,
@@ -267,11 +282,11 @@ const styles = StyleSheet.create({
   statusBadgeText: {
     fontSize: 10,
     fontWeight: "800",
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.surfaceContainer,
     marginVertical: 4,
   },
   bottomSection: {

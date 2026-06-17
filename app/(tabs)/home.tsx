@@ -1,43 +1,20 @@
-﻿import { Ionicons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
-import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
+import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Circle, Transaction } from "../../context/types";
 
+import { getTransactionStyle, getTransactionSubtitle } from "../../constants/TransactionVocabulary";
+
 export default function Home() {
   const router = useRouter();
-  const { user, walletBalance, transactions, circles } = useApp();
-
-  const getTransactionDetails = (type: string) => {
-    switch (type) {
-      case "top_up":
-      case "refund":
-      case "escrow_release":
-      case "disbursement":
-        return {
-          icon: "arrow-up-outline" as const,
-          color: COLORS.secondary,
-          bgColor: "rgba(0, 109, 67, 0.08)",
-          sign: "+",
-          typeLabel: type === "top_up" ? "Top up" : type === "disbursement" ? "Payout" : type === "refund" ? "Refund" : "Release",
-        };
-      case "contribution":
-      case "escrow_lock":
-      default:
-        return {
-          icon: "arrow-up-outline" as const,
-          color: COLORS.outline,
-          bgColor: "#f0f2f5",
-          sign: "-",
-          typeLabel: type === "contribution" ? "Contribution" : type === "escrow_lock" ? "Escrow lock" : "Transfer",
-        };
-    }
-  };
+  const { user, walletBalance, transactions, circles, colors, theme } = useApp();
+  const styles = getStyles(colors);
 
   const getCircleIcon = (name: string) => {
     const lowerName = name.toLowerCase();
@@ -67,11 +44,11 @@ export default function Home() {
         style={styles.circleCardWrapper}
       >
         <Card style={styles.circleCard} variant="outlined" noPadding>
-          <View style={styles.circleCardContent}>
+          <View style={circle.membersCount === 0 ? styles.circleCardContent : styles.circleCardContent}>
             {/* Header info inside circle card */}
             <View style={styles.circleCardHeader}>
               <View style={styles.circleIconContainer}>
-                <Ionicons name={getCircleIcon(circle.name)} size={18} color={COLORS.primary} />
+                <Ionicons name={getCircleIcon(circle.name)} size={18} color={colors.primary} />
                 <Text style={styles.circleCardName} numberOfLines={1}>
                   {circle.name}
                 </Text>
@@ -112,49 +89,53 @@ export default function Home() {
   };
 
   const renderTransactionRow = (item: Transaction, isLast: boolean) => {
-    const details = getTransactionDetails(item.type);
+    const styleInfo = getTransactionStyle(item.type);
+    const sub = getTransactionSubtitle(item);
+    const isPositive = styleInfo.isCredit;
     
     return (
       <View style={styles.txRowWrapper}>
-        <View style={styles.txRow}>
+        <TouchableOpacity 
+          style={styles.txRow} 
+          onPress={() => router.push(`/transaction-detail/${item.id}` as any)}
+        >
           {/* Icon Container */}
-          <View style={[styles.txIconContainer, { backgroundColor: details.bgColor }]}>
-            <Ionicons name={details.icon} size={18} color={details.color} />
+          <View style={[styles.txIconContainer, { backgroundColor: styleInfo.bgColor }]}>
+            <Ionicons name={styleInfo.ionicIcon} size={18} color={styleInfo.color} />
           </View>
 
-          {/* Title and Date Info */}
+          {/* Left / Middle Text block: [Title], [Context/Counterparty], [Time] */}
           <View style={styles.txInfo}>
             <Text style={styles.txTitle} numberOfLines={1}>
-              {item.title}
+              {styleInfo.title}
             </Text>
-            <Text style={styles.txSubtitle}>
+            <Text style={styles.txSubtitle} numberOfLines={1}>
+              {sub}
+            </Text>
+            <Text style={styles.txTime}>
               {item.date}
             </Text>
           </View>
 
-          {/* Amount and Subtitle */}
+          {/* Right Amount */}
           <View style={styles.txAmountContainer}>
             <Text
               style={[
                 styles.txAmount,
-                { color: details.sign === "+" ? COLORS.secondary : COLORS.primary },
+                { color: isPositive ? colors.secondary : colors.error },
               ]}
             >
-              {details.sign}{item.amount.toLocaleString()} XAF
-            </Text>
-            <Text style={styles.txTypeLabel}>
-              {details.typeLabel}
+              {isPositive ? "+" : "-"} {item.amount.toLocaleString()} XAF
             </Text>
           </View>
-        </View>
+        </TouchableOpacity>
         {!isLast && <View style={styles.rowDivider} />}
       </View>
     );
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-      <SafeAreaView>
+    <SafeAreaView style={styles.container}><ScrollView contentContainerStyle={styles.contentContainer}>
       <TopNavBarComponent tabName="Home"/>
 
       {/* Greeting Banner */}
@@ -168,7 +149,7 @@ export default function Home() {
         {/* Card Header with Active Pill and Wallet Icon */}
         <View style={styles.cardHeader}>
           <View style={styles.activeBadgeContainer}>
-            <Ionicons name="refresh" size={12} color={COLORS.tertiaryContainer} />
+            <Ionicons name="refresh" size={12} color={colors.tertiaryContainer} />
             <Text style={styles.activeBadgeText}>Active</Text>
           </View>
           <Ionicons name="wallet-outline" size={20} color="#ffffff" style={{ opacity: 0.8 }} />
@@ -180,14 +161,14 @@ export default function Home() {
           <Text style={styles.balanceText}>{walletBalance.toLocaleString()} XAF</Text>
         </View>
 
-        {/* Card Buttons: Top-up & Send */}
+        {/* Card Buttons: Top-up, Send & Withdraw */}
         <View style={styles.cardButtonsRow}>
           <TouchableOpacity 
             activeOpacity={0.9} 
             style={styles.cardButtonWhite} 
             onPress={() => router.push("/topup")}
           >
-            <Ionicons name="add" size={18} color={COLORS.primaryContainer} />
+            <Ionicons name="add" size={16} color={colors.primaryContainer} />
             <Text style={styles.cardButtonWhiteText}>Top up</Text>
           </TouchableOpacity>
           
@@ -199,6 +180,15 @@ export default function Home() {
             <Ionicons name="paper-plane" size={14} color="#ffffff" style={styles.sendIconRotated} />
             <Text style={styles.cardButtonOutlineText}>Send</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            style={styles.cardButtonOutline} 
+            onPress={() => router.push("/withdraw")}
+          >
+            <Ionicons name="arrow-down" size={14} color="#ffffff" />
+            <Text style={styles.cardButtonOutlineText}>Withdraw</Text>
+          </TouchableOpacity>
         </View>
       </Card>
 
@@ -209,8 +199,8 @@ export default function Home() {
           style={styles.actionButtonCard} 
           onPress={() => router.push("/create-circle")}
         >
-          <View style={[styles.actionIconCircle, { backgroundColor: "#eef3ff" }]}>
-            <Ionicons name="people" size={20} color={COLORS.primaryContainer} />
+          <View style={[styles.actionIconCircle, { backgroundColor: theme === "dark" ? colors.surfaceContainer : "#eef3ff" }]}>
+            <Ionicons name="people" size={20} color={colors.primary} />
           </View>
           <Text style={styles.actionButtonText}>New circle</Text>
         </TouchableOpacity>
@@ -220,8 +210,8 @@ export default function Home() {
           style={styles.actionButtonCard} 
           onPress={() => router.push("/join-circle")}
         >
-          <View style={[styles.actionIconCircle, { backgroundColor: "#f0f2f5" }]}>
-            <Ionicons name="person-add" size={20} color={COLORS.onSurfaceVariant} />
+          <View style={[styles.actionIconCircle, { backgroundColor: theme === "dark" ? colors.surfaceContainer : "#f0f2f5" }]}>
+            <Ionicons name="person-add" size={20} color={colors.onSurfaceVariant} />
           </View>
           <Text style={styles.actionButtonText}>Join circle</Text>
         </TouchableOpacity>
@@ -231,8 +221,8 @@ export default function Home() {
           style={styles.actionButtonCard} 
           onPress={() => router.push("/create-escrow")}
         >
-          <View style={[styles.actionIconCircle, { backgroundColor: "#fdf8e6" }]}>
-            <Ionicons name="shield-checkmark" size={20} color={COLORS.tertiaryContainer} />
+          <View style={[styles.actionIconCircle, { backgroundColor: theme === "dark" ? colors.surfaceContainer : "#fdf8e6" }]}>
+            <Ionicons name="shield-checkmark" size={20} color={colors.tertiary} />
           </View>
           <Text style={styles.actionButtonText}>New escrow</Text>
         </TouchableOpacity>
@@ -260,11 +250,14 @@ export default function Home() {
       <Card style={styles.txCard} noPadding variant="outlined">
         {transactions.length > 0 ? (
           <View style={styles.txList}>
-            {transactions.slice(0, 3).map((item, idx) => (
-              <View key={item.id}>
-                {renderTransactionRow(item, idx === Math.min(transactions.length, 3) - 1)}
-              </View>
-            ))}
+            {[...transactions]
+              .sort((a, b) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime())
+              .slice(0, 3)
+              .map((item, idx, arr) => (
+                <View key={item.id}>
+                  {renderTransactionRow(item, idx === arr.length - 1)}
+                </View>
+              ))}
             
             {/* View Entire History Button */}
             <TouchableOpacity 
@@ -277,19 +270,20 @@ export default function Home() {
           </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No transactions yet</Text>
+            <Text style={styles.emptyText}>
+              No transactions yet.{"\n"}Your transaction history will appear here once you start using MboaPay.
+            </Text>
           </View>
         )}
       </Card>
-      </SafeAreaView>
-    </ScrollView>
+      </ScrollView></SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
@@ -301,11 +295,11 @@ const styles = StyleSheet.create({
   greetingText: {
     fontSize: 24,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   subtitleText: {
     fontSize: 14,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     marginTop: 4,
     fontWeight: "500",
   },
@@ -332,7 +326,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   activeBadgeText: {
-    color: COLORS.tertiaryContainer,
+    color: colors.tertiaryContainer,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -373,7 +367,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   cardButtonWhiteText: {
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
     fontSize: 13,
     fontWeight: "700",
   },
@@ -406,9 +400,9 @@ const styles = StyleSheet.create({
   },
   actionButtonCard: {
     flex: 1,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1.2,
-    borderColor: COLORS.surfaceContainer,
+    borderColor: colors.surfaceContainer,
     borderRadius: ROUNDED.lg,
     paddingVertical: 16,
     alignItems: "center",
@@ -430,7 +424,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     fontSize: 12,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   sectionHeader: {
     flexDirection: "row",
@@ -441,13 +435,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 12,
   },
   sectionLink: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
     marginBottom: 10,
   },
   circlesScroll: {
@@ -458,7 +452,7 @@ const styles = StyleSheet.create({
     width: 215,
   },
   circleCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: ROUNDED.lg,
   },
   circleCardContent: {
@@ -480,12 +474,12 @@ const styles = StyleSheet.create({
   circleCardName: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
     flex: 1,
   },
   circleCardMembers: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   circleCardProgressSection: {
@@ -501,22 +495,22 @@ const styles = StyleSheet.create({
   circleCardCurrentBalance: {
     fontSize: 14,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   circleCardGoalBalance: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   progressBarBg: {
     height: 4,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.surfaceContainer,
     borderRadius: 2,
     overflow: "hidden",
   },
   progressBarFill: {
     height: "100%",
-    backgroundColor: COLORS.secondary, // Green colored balance fill
+    backgroundColor: colors.secondary, // Green colored balance fill
     borderRadius: 2,
   },
   circleCardFooter: {
@@ -526,16 +520,16 @@ const styles = StyleSheet.create({
   },
   circleCardPrepayLabel: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "500",
   },
   circleCardPrepayDate: {
     fontSize: 10,
-    color: COLORS.tertiaryContainer,
+    color: colors.tertiaryContainer,
     fontWeight: "700",
   },
   txCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: 20,
     borderRadius: ROUNDED.lg,
   },
@@ -566,11 +560,17 @@ const styles = StyleSheet.create({
   txTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   txSubtitle: {
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
+  },
+  txTime: {
+    fontSize: 10,
+    color: colors.onSurfaceVariant,
+    opacity: 0.7,
+    marginTop: 2,
   },
   txAmountContainer: {
     alignItems: "flex-end",
@@ -582,37 +582,37 @@ const styles = StyleSheet.create({
   },
   txTypeLabel: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   rowDivider: {
     height: 1.2,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.outlineVariant,
     marginHorizontal: 16,
   },
   viewHistoryButton: {
     height: 44,
     borderRadius: ROUNDED.md,
     borderWidth: 1.2,
-    borderColor: COLORS.surfaceContainer,
+    borderColor: colors.surfaceContainer,
     justifyContent: "center",
     alignItems: "center",
     marginTop: 8,
     marginBottom: 16,
     marginHorizontal: 16,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   viewHistoryText: {
     fontSize: 12,
     fontWeight: "700",
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
   },
   emptyContainer: {
     padding: 30,
     alignItems: "center",
   },
   emptyText: {
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontSize: 14,
   },
 });

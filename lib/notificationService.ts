@@ -13,8 +13,8 @@ const loadNotificationsModule = async () => {
 const isExpoGo = () => Constants.appOwnership === "expo";
 const getExpoProjectId = () =>
   process.env.EXPO_PROJECT_ID ||
-  Constants.expoConfig?.projectId ||
-  Constants.manifest?.projectId ||
+  (Constants.expoConfig as any)?.projectId ||
+  (Constants as any).manifest?.projectId ||
   "";
 
 /**

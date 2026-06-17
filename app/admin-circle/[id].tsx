@@ -1,12 +1,12 @@
-import React, { useState } from "react";
-import { StyleSheet, Text, View, ScrollView, Image, Share, Alert, Clipboard, TouchableOpacity } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useApp } from "../../context/AppContext";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
-import TopNavBarComponent from "../../components/TopNavBarComponent";
-import Card from "../../components/Card";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { Alert, Clipboard, Image, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Button from "../../components/Button";
+import Card from "../../components/Card";
+import TopNavBarComponent from "../../components/TopNavBarComponent";
+import { COLORS, ROUNDED, SPACING, TYPOGRAPHY } from "../../constants/Theme";
+import { useApp } from "../../context/AppContext";
 
 export default function AdminCircleDetail() {
   const router = useRouter();

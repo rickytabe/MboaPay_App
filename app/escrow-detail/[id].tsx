@@ -96,6 +96,8 @@ export default function EscrowDetail() {
         return "UNDER DISPUTE";
       case "released":
         return "COMPLETED & RELEASED";
+      case "refunded":
+        return "REFUNDED";
       default:
         return "ACTIVE";
     }
@@ -116,6 +118,8 @@ export default function EscrowDetail() {
             ? { backgroundColor: COLORS.error }
             : contract.status === "released"
             ? { backgroundColor: COLORS.secondary }
+            : contract.status === "refunded"
+            ? { backgroundColor: "rgba(234, 88, 12, 0.15)" }
             : { backgroundColor: COLORS.primaryContainer }
         ] as any}
       >
@@ -257,6 +261,15 @@ export default function EscrowDetail() {
             <Ionicons name="checkmark-circle" size={22} color={COLORS.secondary} />
             <Text style={styles.releasedInfoText}>
               This protection escrow has closed. Funds are disbursed to the seller's active mobile wallet.
+            </Text>
+          </View>
+        )}
+
+        {contract.status === "refunded" && (
+          <View style={styles.refundedInfoBox}>
+            <Ionicons name="refresh-circle" size={22} color="#ea580c" />
+            <Text style={styles.refundedInfoText}>
+              This protection escrow has been refunded. The amount is returned to the buyer before final seller payout.
             </Text>
           </View>
         )}
@@ -463,6 +476,21 @@ const styles = StyleSheet.create({
   releasedInfoText: {
     flex: 1,
     color: COLORS.secondary,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  refundedInfoBox: {
+    flexDirection: "row",
+    backgroundColor: "rgba(234, 88, 12, 0.12)",
+    padding: 14,
+    borderRadius: ROUNDED.md,
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  refundedInfoText: {
+    flex: 1,
+    color: "#92400e",
     fontSize: 12,
     fontWeight: "600",
     lineHeight: 18,

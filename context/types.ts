@@ -1,4 +1,5 @@
 import type { Session } from "@supabase/supabase-js";
+import { LIGHT_COLORS } from "../constants/Theme";
 
 export interface UserProfile {
   id: string;
@@ -19,6 +20,7 @@ export interface Transaction {
   operator?: string;
   status: string;
   metadata?: any;
+  created_at?: string;
 }
 
 export interface CircleMember {
@@ -62,6 +64,7 @@ export interface Escrow {
   status: string;
   date: string;
   code: string;
+  created_at?: string;
 }
 
 export interface AppNotification {
@@ -74,6 +77,9 @@ export interface AppNotification {
 }
 
 export interface AppContextType {
+  theme: "light" | "dark";
+  colors: typeof LIGHT_COLORS;
+  toggleTheme: () => void;
   user: UserProfile;
   authSession: Session | null;
   hasAuthSession: boolean;

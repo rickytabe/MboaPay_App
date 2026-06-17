@@ -1,13 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
+import { useQuery } from "@tanstack/react-query";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { LIGHT_COLORS, DARK_COLORS } from "../constants/Theme";
+import { notifyAdminOfPendingMember, notifyUserOfApproval, registerPushNotifications, savePushToken } from "../lib/notificationService";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
 import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
-import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
 import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
-import { registerPushNotifications, savePushToken, notifyAdminOfPendingMember, notifyUserOfApproval } from "../lib/notificationService";
-import { loadAppData, subscribeToAppData, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
+import { uploadAvatarToSupabase } from "../lib/uploadImage";
+import { fetchCircles, fetchEscrows, fetchNotifications, fetchTransactions, fetchWalletBalance, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
 import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
 
 const loadNotificationsModule = async () => {
@@ -33,7 +35,7 @@ const INITIAL_USER: UserProfile = {
   name: "",
   phone: "",
   email: "",
-  avatarUrl: "https://i.pravatar.cc/150?img=11",
+  avatarUrl: "",
   isLoggedIn: false,
 };
 
@@ -75,6 +77,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [authSession, setAuthSession] = useState<Session | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [pendingEmail, setPendingEmail] = useState("");
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const colors = theme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+
+  const toggleTheme = useCallback(async () => {
+    const nextTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(nextTheme);
+    try {
+      await AsyncStorage.setItem('mboapay_theme', nextTheme);
+    } catch (e) {
+      console.warn("Failed to persist theme", e);
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    const loadTheme = async () => {
+      try {
+        const storedTheme = await AsyncStorage.getItem('mboapay_theme');
+        if (storedTheme === 'light' || storedTheme === 'dark') {
+          setTheme(storedTheme);
+        }
+      } catch (e) {
+        console.warn("Failed to load stored theme", e);
+      }
+    };
+    loadTheme();
+  }, []);
   
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [selectedOperator, setSelectedOperator] = useState<'MTN' | 'Orange'>('MTN');
@@ -83,12 +112,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [escrows, setEscrows] = useState<Escrow[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
-  const fetchAppData = useCallback(async (currentUserId: string) => {
-    await loadAppData(currentUserId, setWalletBalance, setTransactions, setNotifications, setCircles, setEscrows);
-  }, []);
+  const { data: qWalletBalance, refetch: refetchWallet } = useQuery({ queryKey: ['walletBalance', user.id], queryFn: () => fetchWalletBalance(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qTransactions, refetch: refetchTx } = useQuery({ queryKey: ['transactions', user.id], queryFn: () => fetchTransactions(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qNotifications, refetch: refetchNotif } = useQuery({ queryKey: ['notifications', user.id], queryFn: () => fetchNotifications(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qCircles, refetch: refetchCircles } = useQuery({ queryKey: ['circles', user.id], queryFn: () => fetchCircles(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+  const { data: qEscrows, refetch: refetchEscrows } = useQuery({ queryKey: ['escrows', user.id], queryFn: () => fetchEscrows(user.id), refetchInterval: 5000, enabled: !!user.id && user.isLoggedIn });
+
+  useEffect(() => { if (qWalletBalance !== undefined) setWalletBalance(qWalletBalance); }, [qWalletBalance]);
+  useEffect(() => { if (qTransactions) setTransactions(qTransactions); }, [qTransactions]);
+  useEffect(() => { if (qNotifications) setNotifications(qNotifications); }, [qNotifications]);
+  useEffect(() => { if (qCircles) setCircles(qCircles); }, [qCircles]);
+  useEffect(() => { if (qEscrows) setEscrows(qEscrows); }, [qEscrows]);
 
   const syncProfileFromSession = useCallback(async (session: Session | null) => {
-    const isComplete = await syncProfileFromSessionHelper(session, setAuthSession, setUser, fetchAppData, INITIAL_USER);
+    const isComplete = await syncProfileFromSessionHelper(session, setAuthSession, setUser, INITIAL_USER);
     if (session?.user?.id) {
       const storedAvatarUrl = await loadStoredAvatar(session.user.id);
       if (storedAvatarUrl) {
@@ -96,11 +133,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
     return isComplete;
-  }, [fetchAppData]);
+  }, []);
 
   const refreshData = async () => {
     if (user.id) {
-      await fetchAppData(user.id);
+      await Promise.all([refetchWallet(), refetchTx(), refetchNotif(), refetchCircles(), refetchEscrows()]);
     }
   };
 
@@ -189,13 +226,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [syncProfileFromSession]);
 
-  // Realtime subscriptions for live dashboard
-  useEffect(() => {
-    if (user.id && user.isLoggedIn) {
-      const unsubscribe = subscribeToAppData(user.id, fetchAppData);
-      return () => unsubscribe();
-    }
-  }, [user.id, user.isLoggedIn, fetchAppData]);
+  // (Realtime app data subscriptions replaced by TanStack Query polling)
 
   // Realtime notifications listener to present local alerts instantly
   useEffect(() => {
@@ -338,13 +369,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev, id: currentSession.user.id, name: trimmedName, email: trimmedEmail,
       phone: phone || prev.phone, avatarUrl: avatarUrl || prev.avatarUrl, isLoggedIn: true,
     }));
-    await fetchAppData(currentSession.user.id);
+    await refreshData();
   };
 
   const updateAvatar = async (avatarUrl: string) => {
     if (!user.id) throw new Error("You must be signed in to update your avatar.");
-    await persistAvatar(user.id, avatarUrl);
-    setUser((prev) => ({ ...prev, avatarUrl }));
+    
+    const remotePath = await uploadAvatarToSupabase(avatarUrl, user.id);
+    if (!remotePath) throw new Error("Failed to upload avatar image.");
+
+    const { error } = await supabase.from("users").update({ avatar_url: remotePath }).eq("id", user.id);
+    if (error) throw new Error(error.message);
+
+    // Refresh profile to get signed URL
+    const { data: sessionData } = await supabase.auth.getSession();
+    await syncProfileFromSession(sessionData.session);
   };
 
   const setOperator = (op: 'MTN' | 'Orange') => {
@@ -435,7 +474,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (userId === user.id) {
       setWalletBalance(newBalance);
-      await fetchAppData(user.id);
+      await refreshData();
     }
   };
 
@@ -504,6 +543,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const cleanPhone = phone.replace(/[^0-9]/g, '');
       const finalPhone = cleanPhone.startsWith('237') ? cleanPhone : `237${cleanPhone}`;
+      if (finalPhone === user.phone) throw new Error("You cannot send money to yourself.");
       const phonePlus = `+${finalPhone}`;
       
       const { data: recipientData } = await supabase
@@ -587,7 +627,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (memberError) throw new Error(memberError.message);
 
-    await fetchAppData(user.id);
+    await refreshData();
     return { id: circleData.id, name: circleData.name, code: circleData.invite_code };
   };
 
@@ -617,7 +657,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (insertError) return { success: false, message: insertError.message };
 
-    await fetchAppData(user.id);
+    await refreshData();
 
     if (isPrivate) {
       const { data: admins, error: adminError } = await supabase
@@ -722,7 +762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
-    await fetchAppData(user.id);
+    await refreshData();
   };
 
   const payCircleContribution = async (circleId: string) => {
@@ -750,7 +790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('circle_id', circleId)
       .eq('user_id', user.id);
 
-    await fetchAppData(user.id);
+    await refreshData();
   };
 
   const createEscrowContract = async (
@@ -769,6 +809,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : cleanPhone.slice(-9);
       formattedPhone = `+237${basePhone}`;
     }
+
+    if (formattedPhone === user.phone) throw new Error("You cannot create an escrow with yourself.");
 
     let query = supabase.from('users').select('id');
     if (formattedPhone) {
@@ -798,7 +840,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'locked'
       });
       if (insertError) throw new Error(insertError.message);
-      await fetchAppData(user.id);
+      await refreshData();
     } else {
       const { error: insertError } = await supabase.from('escrows').insert({
         id: contractId,
@@ -809,7 +851,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'pending_payment'
       });
       if (insertError) throw new Error(insertError.message);
-      await fetchAppData(user.id);
+      await refreshData();
     }
   };
 
@@ -826,7 +868,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', escrowId);
     
     if (updateError) throw new Error(updateError.message);
-    await fetchAppData(user.id);
+    await refreshData();
   };
 
   const releaseEscrowContract = async (escrowId: string) => {
@@ -842,7 +884,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', escrowId);
       
     if (updateError) throw new Error(updateError.message);
-    await fetchAppData(user.id);
+    await refreshData();
   };
 
   const disputeEscrowContract = async (escrowId: string) => {
@@ -858,7 +900,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .eq('id', escrowId);
 
     if (updateError) throw new Error(updateError.message);
-    await fetchAppData(user.id);
+    await refreshData();
   };
 
  
@@ -927,6 +969,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider
       value={{
+        theme,
+        colors,
+        toggleTheme,
         user,
         authSession,
         hasAuthSession: Boolean(authSession),

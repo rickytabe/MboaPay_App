@@ -5,9 +5,9 @@ import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
 import { supabase } from "../lib/supabase";
 import { Ionicons } from "@expo/vector-icons";
-import UserSearchModal from "../components/UserSearchModal";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import TopNavBarComponent from "../components/TopNavBarComponent";
+import InlineUserSearch from "../components/InlineUserSearch";
+import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import Button from "../components/Button";
 
 export default function CreateEscrow() {
@@ -19,7 +19,6 @@ export default function CreateEscrow() {
   const [amount, setAmount] = useState("");
   const [role, setRole] = useState<"buyer" | "seller">("buyer");
   const [counterpartyPhone, setCounterpartyPhone] = useState("");
-  const [searchModalVisible, setSearchModalVisible] = useState(false);
   const [counterpartyName, setCounterpartyName] = useState("");
   const [isValidatingPhone, setIsValidatingPhone] = useState(false);
   const [phoneError, setPhoneError] = useState("");
@@ -163,25 +162,35 @@ export default function CreateEscrow() {
               </View>
             </View>
 
+            {/* Counterparty Search */}
+            <View style={{ zIndex: 10 }}>
+              <InlineUserSearch 
+                placeholder="Search MboaPay User by Name..."
+                onSelectUser={(u) => {
+                  setCounterpartyPhone(u.phone.replace('+237', ''));
+                  setCounterpartyName(u.full_name);
+                }} 
+              />
+            </View>
+
             {/* Counterparty */}
             <View style={styles.inputGroup}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={styles.label}>
-                  {role === "buyer" ? "Seller's Phone Number" : "Buyer's Phone Number"}
-                </Text>
-                <TouchableOpacity onPress={() => setSearchModalVisible(true)} style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="search" size={14} color={COLORS.primary} style={{marginRight: 4}} />
-                  <Text style={{ fontSize: 13, fontWeight: "600", color: COLORS.primary }}>Search User</Text>
-                </TouchableOpacity>
+              <Text style={styles.label}>
+                {role === "buyer" ? "Seller's Phone Number" : "Buyer's Phone Number"}
+              </Text>
+              <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 0 }]}>
+                <View style={{ paddingHorizontal: 12, borderRightWidth: 1, borderRightColor: COLORS.surfaceContainer, marginRight: 8, height: '100%', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', color: COLORS.onSurfaceVariant }}>+237</Text>
+                </View>
+                <TextInput
+                  style={{ flex: 1, fontSize: 16, color: COLORS.primary, paddingVertical: 14 }}
+                  placeholder="e.g. 670000000"
+                  placeholderTextColor={COLORS.outline}
+                  keyboardType="phone-pad"
+                  value={counterpartyPhone}
+                  onChangeText={setCounterpartyPhone}
+                />
               </View>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 670000000"
-                placeholderTextColor={COLORS.outline}
-                keyboardType="phone-pad"
-                value={counterpartyPhone}
-                onChangeText={setCounterpartyPhone}
-              />
               {isValidatingPhone && (
                 <Text style={styles.validationText}>Finding user...</Text>
               )}
@@ -232,14 +241,6 @@ export default function CreateEscrow() {
           />
         </View>
       </ScrollView>
-      <UserSearchModal
-        visible={searchModalVisible}
-        onClose={() => setSearchModalVisible(false)}
-        onSelectUser={(u) => {
-          setCounterpartyPhone(u.phone.replace('+237', ''));
-          setSearchModalVisible(false);
-        }}
-      />
     </KeyboardAvoidingView>
   );
 }
@@ -264,18 +265,19 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   inputGroup: {
-    gap: 8,
+    gap: 12,
   },
   label: {
     fontSize: 14,
     fontWeight: "700",
     color: COLORS.primary,
+    marginBottom: 12,
   },
   input: {
     height: 54,
     backgroundColor: COLORS.surface,
     borderWidth: 1.5,
-    borderColor: COLORS.outlineVariant,
+    borderColor: COLORS.outline,
     borderRadius: ROUNDED.md,
     paddingHorizontal: SPACING.md,
     fontSize: 15,

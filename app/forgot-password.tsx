@@ -2,16 +2,17 @@ import React, { useState } from "react";
 import { StyleSheet, Text, View, TextInput, KeyboardAvoidingView, Platform, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
+import { LIGHT_COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../constants/Theme";
 import Button from "../components/Button";
 import { useApp } from "../context/AppContext";
 
 export default function ForgotPassword() {
   const router = useRouter();
-  const { requestPasswordReset } = useApp();
+  const { requestPasswordReset, colors } = useApp();
   const [email, setEmail] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const styles = getStyles(colors);
 
   const handleResetRequest = async () => {
     if (!email) {
@@ -41,7 +42,7 @@ export default function ForgotPassword() {
     >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reset Password</Text>
         <View style={styles.headerSpacer} />
@@ -56,7 +57,7 @@ export default function ForgotPassword() {
           <TextInput
             style={styles.input}
             placeholder="you@example.com"
-            placeholderTextColor={COLORS.outline}
+            placeholderTextColor={colors.outline}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -66,7 +67,7 @@ export default function ForgotPassword() {
 
         {error ? (
           <View style={styles.errorRow}>
-            <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+            <Ionicons name="alert-circle" size={14} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -85,10 +86,10 @@ export default function ForgotPassword() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     paddingHorizontal: SPACING.containerPadding,
     paddingTop: 56,
   },
@@ -102,10 +103,10 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
@@ -114,17 +115,18 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   headerSpacer: { width: 44 },
   content: { flex: 1 },
   title: {
     ...TYPOGRAPHY.bodyLg,
     marginBottom: 8,
+    color: colors.primary,
   },
   subtitle: {
     ...TYPOGRAPHY.bodyMd,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     marginBottom: 40,
     lineHeight: 22,
   },
@@ -135,17 +137,17 @@ const styles = StyleSheet.create({
   label: {
     ...TYPOGRAPHY.bodyMd,
     fontWeight: "600",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   input: {
     height: 56,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: COLORS.outlineVariant,
+    borderColor: colors.outlineVariant,
     borderRadius: ROUNDED.md,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: COLORS.primary,
+    color: colors.onBackground,
   },
   errorRow: {
     flexDirection: "row",
@@ -154,7 +156,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   errorText: {
-    color: COLORS.error,
+    color: colors.error,
     fontSize: 12,
     fontWeight: "600",
   },

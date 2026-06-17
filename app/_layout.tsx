@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Slot, useRouter, useSegments } from "expo-router";
@@ -56,14 +57,18 @@ function AppShell() {
   );
 }
 
+const queryClient = new QueryClient();
+
 export default function RootLayout() {
   return (
-    <AppProvider>
-      <SafeAreaProvider>
-        <ToastProvider>
-          <AppShell />
-        </ToastProvider>
-      </SafeAreaProvider>
-    </AppProvider>
+    <QueryClientProvider client={queryClient}>
+      <AppProvider>
+        <SafeAreaProvider>
+          <ToastProvider>
+            <AppShell />
+          </ToastProvider>
+        </SafeAreaProvider>
+      </AppProvider>
+    </QueryClientProvider>
   );
 }

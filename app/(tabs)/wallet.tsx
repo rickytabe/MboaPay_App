@@ -1,21 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
-import { COLORS, ROUNDED, SPACING } from "../../constants/Theme";
+import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
 import type { Transaction } from "../../context/types";
 
+import { getTransactionStyle, getTransactionSubtitle } from "../../constants/TransactionVocabulary";
+
 export default function Wallet() {
   const router = useRouter();
-  const { walletBalance, transactions, selectedOperator, setOperator } = useApp();
+  const { walletBalance, transactions, selectedOperator, setOperator, colors, theme } = useApp();
+  const styles = getStyles(colors);
   const [activeTab, setActiveTab] = useState<"all" | "deposit" | "send">("all");
 
-  const isInflowType = (type: string) => ["top_up", "refund", "escrow_release"].includes(type);
-  const isOutflowType = (type: string) => ["disbursement", "contribution", "escrow_lock"].includes(type);
+  const isInflowType = (type: string) => ["top_up", "refund", "escrow_release", "transfer_in"].includes(type);
+  const isOutflowType = (type: string) => ["disbursement", "contribution", "escrow_deposit", "escrow_lock", "transfer_out"].includes(type);
 
   const filteredTransactions = transactions.filter((tx) => {
     if (activeTab === "all") return true;
@@ -24,52 +27,75 @@ export default function Wallet() {
     return true;
   });
 
-  const getTransactionIcon = (type: string) => {
-    switch (type) {
-      case "top_up":
-        return { name: "arrow-up-outline" as const, color: COLORS.secondary };
-      case "contribution":
-        return { name: "arrow-up-outline" as const, color: COLORS.onSurfaceVariant };
-      case "disbursement":
-        return { name: "arrow-down-outline" as const, color: COLORS.secondary };
-      case "refund":
-        return { name: "arrow-back-outline" as const, color: COLORS.secondary };
-      case "escrow_lock":
-        return { name: "lock-closed-outline" as const, color: COLORS.primary };
-      case "escrow_release":
-        return { name: "lock-open-outline" as const, color: COLORS.secondary };
-      default:
-        return { name: "swap-horizontal-outline" as const, color: COLORS.onSurfaceVariant };
+  const getGroupLabel = (item: Transaction) => {
+    const rawDate = item.created_at || item.metadata?.created_at;
+    const txDate = rawDate ? new Date(rawDate) : new Date(item.date);
+    
+    if (isNaN(txDate.getTime())) {
+      return "Earlier";
+    }
+
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+
+    if (txDate.toDateString() === today.toDateString()) {
+      return "Today";
+    } else if (txDate.toDateString() === yesterday.toDateString()) {
+      return "Yesterday";
+    } else {
+      return txDate.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
     }
   };
 
-  const renderTransactionRow = (item: Transaction, idx: number) => {
-    const icon = getTransactionIcon(item.type);
-    const isPositive = isInflowType(item.type);
+  const sortedFilteredTransactions = [...filteredTransactions].sort(
+    (a, b) => new Date(b.created_at || b.date).getTime() - new Date(a.created_at || a.date).getTime()
+  );
+
+  const groupedTransactions: { [key: string]: Transaction[] } = {};
+  const groupOrder: string[] = [];
+
+  sortedFilteredTransactions.forEach((tx) => {
+    const label = getGroupLabel(tx);
+    if (!groupedTransactions[label]) {
+      groupedTransactions[label] = [];
+      groupOrder.push(label);
+    }
+    groupedTransactions[label].push(tx);
+  });
+
+  const renderTransactionRow = (item: Transaction, isLast: boolean) => {
+    const styleInfo = getTransactionStyle(item.type);
+    const sub = getTransactionSubtitle(item);
+    const isPositive = styleInfo.isCredit;
     
     return (
       <View key={item.id}>
         <TouchableOpacity style={styles.txRow} onPress={() => router.push(`/transaction-detail/${item.id}` as any)}>
-          <View style={[styles.txIconContainer, { backgroundColor: icon.color + "15" }]}>
-            <Ionicons name={icon.name} size={18} color={icon.color} />
+          <View style={[styles.txIconContainer, { backgroundColor: styleInfo.bgColor }]}>
+            <Ionicons name={styleInfo.ionicIcon} size={18} color={styleInfo.color} />
           </View>
+          
+          {/* Left / Middle Text block: [Title], [Context/Counterparty], [Time] */}
           <View style={styles.txInfo}>
-            <Text style={styles.txTitle}>{item.title}</Text>
-            <Text style={styles.txSubtitle}>{item.subtitle}</Text>
+            <Text style={styles.txTitle}>{styleInfo.title}</Text>
+            <Text style={styles.txSubtitle} numberOfLines={1}>{sub}</Text>
+            <Text style={styles.txTime}>{item.date}</Text>
           </View>
+
+          {/* Right Amount */}
           <View style={styles.txAmountContainer}>
             <Text
               style={[
                 styles.txAmount,
-                isPositive ? styles.txPositive : styles.txNegative,
+                { color: isPositive ? colors.secondary : colors.error },
               ]}
             >
               {isPositive ? "+" : "-"} {item.amount.toLocaleString()} XAF
             </Text>
-            <Text style={styles.txDate}>{item.date}</Text>
           </View>
         </TouchableOpacity>
-        {idx < filteredTransactions.length - 1 && <View style={styles.divider} />}
+        {!isLast && <View style={styles.divider} />}
       </View>
     );
   };
@@ -95,8 +121,8 @@ export default function Wallet() {
         style={[
           styles.walletCard,
           selectedOperator === "MTN"
-            ? { borderLeftWidth: 6, borderLeftColor: COLORS.mtn }
-            : { borderLeftWidth: 6, borderLeftColor: COLORS.orange },
+            ? { borderLeftWidth: 6, borderLeftColor: colors.mtn }
+            : { borderLeftWidth: 6, borderLeftColor: colors.orange },
         ] as any}
       >
         <View style={styles.walletDetails}>
@@ -107,7 +133,7 @@ export default function Wallet() {
           <Ionicons
             name="checkmark-circle"
             size={22}
-            color={selectedOperator === "MTN" ? COLORS.mtn : COLORS.orange}
+            color={selectedOperator === "MTN" ? colors.mtn : colors.orange}
           />
         </View>
         
@@ -115,6 +141,15 @@ export default function Wallet() {
           <Text style={styles.balanceLabel}>Available Balance</Text>
           <Text style={styles.balanceText}>{walletBalance.toLocaleString()} XAF</Text>
         </View>
+        <Image
+          source={
+            selectedOperator === "MTN"
+              ? require("../../assets/mtn_momo.png")
+              : require("../../assets/orange_momo.png")
+          }
+          style={styles.operatorLogoLarge}
+          resizeMode="contain"
+        />
       </Card>
 
       {/* Wallet Actions */}
@@ -163,11 +198,24 @@ export default function Wallet() {
       {/* Transaction List Card */}
       <Card style={styles.historyCard} noPadding>
         {filteredTransactions.length > 0 ? (
-          filteredTransactions.map(renderTransactionRow)
+          groupOrder.map((groupLabel) => (
+            <View key={groupLabel} style={styles.groupContainer}>
+              <View style={styles.groupHeaderContainer}>
+                <Text style={styles.groupHeaderText}>{groupLabel}</Text>
+              </View>
+              {groupedTransactions[groupLabel].map((item, idx) => 
+                renderTransactionRow(item, idx === groupedTransactions[groupLabel].length - 1)
+              )}
+            </View>
+          ))
         ) : (
           <View style={styles.emptyHistory}>
-            <Ionicons name="receipt-outline" size={40} color={COLORS.outline} />
-            <Text style={styles.emptyHistoryText}>No transactions found for this filter</Text>
+            <Ionicons name="receipt-outline" size={40} color={colors.outline} />
+            <Text style={styles.emptyHistoryText}>
+              {transactions.length === 0 
+                ? "No transactions yet.\nYour transaction history will appear here once you start using MboaPay."
+                : "No transactions found for this filter"}
+            </Text>
           </View>
         )}
       </Card>
@@ -175,10 +223,10 @@ export default function Wallet() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingHorizontal: SPACING.containerPadding,
@@ -197,20 +245,20 @@ const styles = StyleSheet.create({
   },
   detectedText: {
     fontSize: 14,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   changeLink: {
-    color: COLORS.primary,
+    color: colors.primary,
     fontWeight: "700",
   },
   mnoLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   walletCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     paddingVertical: 20,
     marginBottom: 20,
   },
@@ -223,11 +271,11 @@ const styles = StyleSheet.create({
   walletName: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   walletNumber: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     marginTop: 2,
   },
   balanceContainer: {
@@ -235,13 +283,40 @@ const styles = StyleSheet.create({
   },
   balanceLabel: {
     fontSize: 12,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontWeight: "600",
   },
   balanceText: {
     fontSize: 28,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: colors.primary,
+  },
+  operatorBadge: {
+    position: "absolute",
+    bottom: 14,
+    right: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceContainer,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  operatorLogo: {
+    width: 34,
+    height: 34,
+  },
+  operatorLogoLarge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    width: 72,
+    height: 72,
   },
   actionButtonsRow: {
     flexDirection: "row",
@@ -257,11 +332,11 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   tabsContainer: {
     flexDirection: "row",
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.surfaceContainer,
     borderRadius: ROUNDED.md,
     padding: 3,
     marginBottom: 16,
@@ -273,18 +348,18 @@ const styles = StyleSheet.create({
     borderRadius: ROUNDED.default,
   },
   tabButtonActive: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
   },
   tabText: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
   },
   tabTextActive: {
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
   },
   historyCard: {
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     marginBottom: 20,
   },
   txRow: {
@@ -308,11 +383,33 @@ const styles = StyleSheet.create({
   txTitle: {
     fontSize: 13,
     fontWeight: "700",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   txSubtitle: {
     fontSize: 11,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
+  },
+  txTime: {
+    fontSize: 10,
+    color: colors.onSurfaceVariant,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  groupContainer: {
+    marginBottom: 8,
+  },
+  groupHeaderContainer: {
+    backgroundColor: colors.surfaceContainerLow,
+    paddingVertical: 6,
+    paddingHorizontal: SPACING.md,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.surfaceContainer,
+  },
+  groupHeaderText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primaryContainer,
   },
   txAmountContainer: {
     alignItems: "flex-end",
@@ -323,18 +420,18 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   txPositive: {
-    color: COLORS.secondary,
+    color: colors.secondary,
   },
   txNegative: {
-    color: COLORS.primary,
+    color: colors.primary,
   },
   txDate: {
     fontSize: 10,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
   },
   divider: {
     height: 1,
-    backgroundColor: COLORS.surfaceContainer,
+    backgroundColor: colors.outlineVariant,
     marginHorizontal: SPACING.md,
   },
   emptyHistory: {
@@ -343,7 +440,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyHistoryText: {
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     fontSize: 14,
     textAlign: "center",
   },

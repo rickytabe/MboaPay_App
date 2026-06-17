@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
-import { COLORS, SPACING, TYPOGRAPHY } from "../constants/Theme";
+import { LIGHT_COLORS, SPACING } from "../constants/Theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Button } from "../components/Button";
 import { useToast } from "../context/ToastContext";
@@ -18,8 +18,9 @@ import { getErrorMessage } from "../lib/errors";
 
 export default function Login() {
   const router = useRouter();
-  const { loginWithEmail } = useApp();
+  const { loginWithEmail, colors } = useApp();
   const toast = useToast();
+  const styles = getStyles(colors);
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -56,7 +57,7 @@ export default function Login() {
     >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={COLORS.primary} />
+          <Ionicons name="arrow-back" size={22} color={colors.primary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Sign In</Text>
         <View style={styles.headerSpacer} />
@@ -71,7 +72,7 @@ export default function Login() {
           <TextInput
             style={styles.input}
             placeholder="you@example.com"
-            placeholderTextColor={COLORS.outline}
+            placeholderTextColor={colors.outline}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -85,7 +86,7 @@ export default function Login() {
             <TextInput
               style={styles.passwordInput}
               placeholder="••••••••"
-              placeholderTextColor={COLORS.outline}
+              placeholderTextColor={colors.outline}
               value={password}
               onChangeText={setPassword}
               secureTextEntry={!showPassword}
@@ -98,7 +99,7 @@ export default function Login() {
               <Ionicons 
                 name={showPassword ? "eye-off-outline" : "eye-outline"} 
                 size={22} 
-                color={COLORS.onSurfaceVariant} 
+                color={colors.onSurfaceVariant} 
               />
             </TouchableOpacity>
           </View>
@@ -112,7 +113,7 @@ export default function Login() {
 
         {error ? (
           <View style={styles.errorRow}>
-            <Ionicons name="alert-circle" size={14} color={COLORS.error} />
+            <Ionicons name="alert-circle" size={14} color={colors.error} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -131,10 +132,10 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: colors.background,
     paddingHorizontal: SPACING.containerPadding,
     paddingTop: 56,
   },
@@ -148,10 +149,10 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: COLORS.primary,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
@@ -160,51 +161,53 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: COLORS.primary,
+    color: colors.primary,
   },
   headerSpacer: { width: 44, height: 44 },
   content: { flex: 1 },
   title: {
     fontSize: 30,
     fontWeight: "900",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 10,
   },
   subtitle: {
     fontSize: 15,
-    color: COLORS.onSurfaceVariant,
+    color: colors.onSurfaceVariant,
     marginBottom: 36,
   },
   inputContainer: { marginBottom: 20 },
   label: {
     fontSize: 14,
     fontWeight: "600",
-    color: COLORS.primary,
+    color: colors.primary,
     marginBottom: 8,
   },
   input: {
     height: 56,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     paddingHorizontal: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
+    borderColor: colors.outlineVariant,
+    color: colors.onBackground,
   },
   passwordWrapper: {
     flexDirection: "row",
     alignItems: "center",
     height: 56,
-    backgroundColor: COLORS.surface,
+    backgroundColor: colors.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: COLORS.outlineVariant,
+    borderColor: colors.outlineVariant,
   },
   passwordInput: {
     flex: 1,
     height: "100%",
     paddingHorizontal: 16,
     fontSize: 16,
+    color: colors.onBackground,
   },
   eyeButton: {
     padding: 16,
@@ -218,7 +221,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   errorText: {
-    color: COLORS.error,
+    color: colors.error,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -227,7 +230,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   forgotPasswordText: {
-    color: COLORS.primaryContainer,
+    color: colors.primaryContainer,
     fontSize: 13,
     fontWeight: "700",
   },
