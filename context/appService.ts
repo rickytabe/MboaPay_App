@@ -35,6 +35,15 @@ const mapTransaction = (tx: any): Transaction => {
   } else if (tx.type === "refund") {
     title = "Refund";
     subtitle = "Funds returned";
+  } else if (tx.type === "transfer_out") {
+    title = "Transfer Sent";
+    subtitle = tx.metadata?.recipientName ? `Sent to ${tx.metadata.recipientName}` : "Internal transfer";
+  } else if (tx.type === "transfer_in") {
+    title = "Transfer Received";
+    subtitle = tx.metadata?.senderName ? `From ${tx.metadata.senderName}` : "Internal transfer";
+  } else if (tx.type === "disbursement") {
+    title = "Withdrawal";
+    subtitle = "To Mobile Money";
   }
 
   return {
@@ -46,6 +55,7 @@ const mapTransaction = (tx: any): Transaction => {
     date: dateStr,
     operator: tx.mno_provider,
     status: tx.status === "successful" ? "success" : tx.status,
+    metadata: tx.metadata,
   };
 };
 
@@ -93,13 +103,15 @@ const mapCircle = (circle: any, currentUserId: string): Circle => {
 
 const mapEscrow = (escrow: any, currentUserId: string): Escrow => {
   const isBuyer = escrow.sender_id === currentUserId;
+  const otherUser = isBuyer ? escrow.recipient : escrow.sender;
   return {
     id: escrow.id,
     title: escrow.description || "Escrow Contract",
     description: escrow.description || "",
     role: isBuyer ? "buyer" : "seller",
     amount: escrow.amount,
-    otherParty: isBuyer ? "Seller" : "Buyer",
+    otherParty: otherUser?.full_name || otherUser?.phone || (isBuyer ? "Seller" : "Buyer"),
+    otherPartyPhone: otherUser?.phone || "",
     status: escrow.status,
     date: formatTimestamp(escrow.created_at),
     code: escrow.id.substring(0, 8).toUpperCase(),
@@ -133,7 +145,9 @@ export const loadAppData = async (
   if (circlesError) console.error("Circles fetch error:", circlesError);
   if (circlesData) setCircles(circlesData.map((circle: any) => mapCircle(circle, currentUserId)));
 
-  const { data: escrowsData } = await supabase.from("escrows").select("*");
+  const { data: escrowsData } = await supabase
+    .from("escrows")
+    .select("*, sender:users!sender_id(full_name, phone), recipient:users!recipient_id(full_name, phone)");
   if (escrowsData) setEscrows(escrowsData.map((escrow: any) => mapEscrow(escrow, currentUserId)));
 };
 

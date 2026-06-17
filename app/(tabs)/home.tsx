@@ -296,7 +296,6 @@ const styles = StyleSheet.create({
     paddingBottom: 110, // Generous padding to clear the custom elevated tab bar
   },
   welcomeSection: {
-    marginTop: 16,
     marginBottom: 16,
   },
   greetingText: {

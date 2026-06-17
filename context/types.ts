@@ -18,6 +18,7 @@ export interface Transaction {
   date: string;
   operator?: string;
   status: string;
+  metadata?: any;
 }
 
 export interface CircleMember {
@@ -57,6 +58,7 @@ export interface Escrow {
   role: "buyer" | "seller";
   amount: number;
   otherParty: string;
+  otherPartyPhone: string;
   status: string;
   date: string;
   code: string;
@@ -91,12 +93,14 @@ export interface AppContextType {
   updateAvatar: (avatarUrl: string) => Promise<void>;
   setOperator: (op: "MTN" | "Orange") => void;
   topUpWallet: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
+  withdrawFunds: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
   sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;
   createCircle: (name: string, type: "solo" | "pool" | "rotation", goal: number, contribution: number, frequency: "daily" | "weekly" | "monthly", maxMembers: number, visibility: 'public' | 'private') => Promise<{ id: string; name: string; code: string }>;
   joinCircleByCode: (code: string) => Promise<{ success: boolean; message: string }>;
   approveCircleMember: (memberId: string) => Promise<void>;
   payCircleContribution: (circleId: string) => Promise<void>;
   createEscrowContract: (title: string, desc: string, amount: number, otherParty: string, role: "buyer" | "seller") => Promise<void>;
+  lockEscrowFunds: (escrowId: string) => Promise<void>;
   releaseEscrowContract: (escrowId: string) => Promise<void>;
   disputeEscrowContract: (escrowId: string) => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;

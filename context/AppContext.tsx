@@ -1,14 +1,23 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Session } from "@supabase/supabase-js";
-import * as Notifications from "expo-notifications";
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { PROVIDER_CODES } from "../lib/pawapay/constants";
 import { initiateDeposit, pollDepositUntilFinal } from "../lib/pawapay/deposits";
 import { initiatePayout, pollPayoutUntilFinal } from "../lib/pawapay/payouts";
 import { initiateRefund, pollRefundUntilFinal } from "../lib/pawapay/refunds";
 import { ensureSupabaseConfigured, supabase, supabaseConfigError } from "../lib/supabase";
+import { registerPushNotifications, savePushToken, notifyAdminOfPendingMember, notifyUserOfApproval } from "../lib/notificationService";
 import { loadAppData, subscribeToAppData, syncProfileFromSession as syncProfileFromSessionHelper } from "./appService";
 import type { AppContextType, AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
+
+const loadNotificationsModule = async () => {
+  try {
+    return await import("expo-notifications");
+  } catch (error) {
+    console.warn("Could not load expo-notifications:", error);
+    return null;
+  }
+};
 
 const generateId = () => {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -47,15 +56,19 @@ const persistAvatar = async (userId: string, avatarUrl: string) => {
   }
 };
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+const setNotificationHandler = async () => {
+  const Notifications = await loadNotificationsModule();
+  if (!Notifications) return;
+
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+};
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
@@ -93,6 +106,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const presentLocalNotification = async (title: string, body: string) => {
     try {
+      await setNotificationHandler();
+      const Notifications = await loadNotificationsModule();
+      if (!Notifications) return;
+
       await Notifications.scheduleNotificationAsync({
         content: {
           title,
@@ -112,8 +129,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const { error } = await supabase.from("notifications").insert({
       user_id: userIdToUse,
       type,
-      title,
-      message,
+      message: `**${title}**\n\n${message}`,
     });
     if (error) {
       console.warn("Notification record error:", error.message);
@@ -121,19 +137,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
-    const registerNotifications = async () => {
+    const setupPushNotifications = async () => {
       try {
-        const { status } = await Notifications.requestPermissionsAsync();
-        if (status !== "granted") return;
-        const tokenData = await Notifications.getExpoPushTokenAsync();
-        console.log("Expo push token:", tokenData.data);
+        const token = await registerPushNotifications();
+        if (token && user.id) {
+          await savePushToken(user.id, token);
+        }
       } catch (error) {
-        console.warn("Notification registration failed:", error);
+        console.warn("Push notification setup failed:", error);
       }
     };
 
-    void registerNotifications();
-  }, []);
+    if (user.id && user.isLoggedIn) {
+      void setupPushNotifications();
+    }
+  }, [user.id, user.isLoggedIn]);
 
   useEffect(() => {
     let isMounted = true;
@@ -178,6 +196,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return () => unsubscribe();
     }
   }, [user.id, user.isLoggedIn, fetchAppData]);
+
+  // Realtime notifications listener to present local alerts instantly
+  useEffect(() => {
+    if (!user.id || !user.isLoggedIn) return;
+
+    const notifChannel = supabase
+      .channel(`user-notifications-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          if (payload.new) {
+            void presentLocalNotification(
+              payload.new.title || "MboaPay",
+              payload.new.message || ""
+            );
+            void refreshData();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(notifChannel);
+    };
+  }, [user.id, user.isLoggedIn]);
 
   // Load persisted operator or auto-detect when user changes
   useEffect(() => {
@@ -344,141 +393,162 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return 'MTN';
   };
 
+  const executeWalletTransfer = async (
+    userId: string,
+    amount: number,
+    type: 'top_up' | 'disbursement' | 'escrow_deposit' | 'escrow_release' | 'contribution' | 'refund' | 'transfer_in' | 'transfer_out',
+    transactionId: string,
+    metadata?: any,
+    operator?: string
+  ) => {
+    const { data: walletData, error: fetchError } = await supabase.from('wallets').select('balance').eq('user_id', userId).single();
+    if (fetchError) throw new Error("Could not fetch wallet balance.");
+    
+    const currentBalance = walletData.balance || 0;
+    let newBalance = currentBalance;
+    const isCredit = ['top_up', 'escrow_release', 'refund', 'transfer_in'].includes(type);
+    
+    if (isCredit) {
+      newBalance += amount;
+    } else {
+      if (currentBalance < amount) throw new Error("Insufficient wallet balance.");
+      newBalance -= amount;
+    }
+
+    const { error: walletError } = await supabase.from('wallets').update({ balance: newBalance }).eq('user_id', userId);
+    if (walletError) throw new Error("Failed to update wallet balance.");
+
+    const { error: txError } = await supabase.from('transactions').upsert({
+      id: transactionId,
+      user_id: userId,
+      amount,
+      type,
+      status: 'successful',
+      pawapay_ref: transactionId,
+      mno_provider: operator || null,
+      metadata
+    });
+    if (txError) {
+      console.error("TX ERROR:", txError);
+      throw new Error(`Failed to record transaction: ${txError.message}`);
+    }
+
+    if (userId === user.id) {
+      setWalletBalance(newBalance);
+      await fetchAppData(user.id);
+    }
+  };
+
   const topUpWallet = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
     const depositId = generateId();
     const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
 
-    // 1. Insert a pending transaction first to be safe
     const { error: txError } = await supabase.from('transactions').insert({
-      id: depositId,
-      user_id: user.id,
-      amount,
-      type: 'top_up',
-      status: 'pending',
-      mno_provider: operator
+      id: depositId, user_id: user.id, amount, type: 'top_up', status: 'pending', mno_provider: operator
     });
     if (txError) throw new Error(txError.message);
 
-    // 2. Initiate deposit
-    await initiateDeposit({
-      depositId,
-      phoneNumber: user.phone,
-      provider,
-      amount,
-      note: "Wallet Top-up",
-    });
-
-    // 3. Poll for completion
+    await initiateDeposit({ depositId, phoneNumber: user.phone, provider, amount, note: "Wallet Top-up" });
     const finalStatus = await pollDepositUntilFinal(depositId);
     
     if (finalStatus.status === "COMPLETED") {
-      // 4. Update transaction status and wallet balance
-      await supabase.from('transactions').update({ 
-        status: 'successful',
-        pawapay_ref: finalStatus.depositId || depositId,
-        metadata: finalStatus
-      }).eq('id', depositId);
-
-      const { error: walletError } = await supabase
-        .from('wallets')
-        .update({ balance: walletBalance + amount })
-        .eq('user_id', user.id);
-      if (walletError) throw new Error(walletError.message || 'Failed to update wallet balance.');
+      await executeWalletTransfer(user.id, amount, 'top_up', depositId, finalStatus, operator);
 
       await Promise.all([
-        createNotificationRecord(
-          'deposit',
-          'Wallet Top-up Successful',
-          `Your wallet has been topped up by ${amount.toLocaleString()} XAF.`
-        ),
-        presentLocalNotification(
-          'Top-up Successful',
-          `Added ${amount.toLocaleString()} XAF to your wallet.`
-        ),
+        createNotificationRecord('deposit', 'Wallet Top-up Successful', `Your wallet has been topped up by ${amount.toLocaleString()} XAF.`),
+        presentLocalNotification('Top-up Successful', `Added ${amount.toLocaleString()} XAF to your wallet.`),
       ]);
-
-      await fetchAppData(user.id);
       return depositId;
     } else {
-      await supabase.from('transactions').update({ 
-        status: 'failed',
-        pawapay_ref: finalStatus.depositId || depositId,
-        metadata: finalStatus
-      }).eq('id', depositId);
+      await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', depositId);
       throw new Error(`Deposit failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+    }
+  };
+
+  const withdrawFunds = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
+    try {
+      if (amount > walletBalance) throw new Error("Insufficient wallet balance for withdrawal.");
+
+      const payoutId = generateId();
+      const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+      const { error: txError } = await supabase.from('transactions').insert({
+        id: payoutId, user_id: user.id, amount, type: 'disbursement', status: 'pending', mno_provider: operator
+      });
+      if (txError) throw new Error(txError.message);
+
+      await initiatePayout({ payoutId, phoneNumber: user.phone, provider, amount, note: "Wallet Withdrawal" });
+      const finalStatus = await pollPayoutUntilFinal(payoutId);
+      
+      if (finalStatus.status === "COMPLETED") {
+        await executeWalletTransfer(user.id, amount, 'disbursement', payoutId, finalStatus, operator);
+
+        await Promise.all([
+          createNotificationRecord('disbursement', 'Withdrawal Successful', `You withdrew ${amount.toLocaleString()} XAF to your ${operator} account.`),
+          presentLocalNotification('Withdrawal Completed', `You withdrew ${amount.toLocaleString()} XAF.`),
+        ]);
+        return payoutId;
+      } else {
+        await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', payoutId);
+        throw new Error(`Withdrawal failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      console.error("[withdrawFunds] Exception:", error);
+      throw error;
     }
   };
 
   const sendMoney = async (amount: number, phone: string, operator: 'MTN' | 'Orange', note: string): Promise<string> => {
     try {
-      if (amount > walletBalance) {
-        throw new Error("Insufficient wallet balance for this transfer.");
-      }
+      if (amount > walletBalance) throw new Error("Insufficient wallet balance for this transfer.");
 
-      const payoutId = generateId();
-      const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
-
-      // 1. Insert a pending transaction first to be safe
-      const { error: txError } = await supabase.from('transactions').insert({
-        id: payoutId,
-        user_id: user.id,
-        amount,
-        type: 'disbursement',
-        status: 'pending',
-        mno_provider: operator
-      });
-      if (txError) throw new Error(txError.message);
-
-      // 2. Initiate payout
-      await initiatePayout({
-        payoutId,
-        phoneNumber: phone,
-        provider,
-        amount,
-        note: note || "Wallet Transfer",
-      });
-
-      // 3. Poll for completion
-      const finalStatus = await pollPayoutUntilFinal(payoutId);
+      const cleanPhone = phone.replace(/[^0-9]/g, '');
+      const finalPhone = cleanPhone.startsWith('237') ? cleanPhone : `237${cleanPhone}`;
+      const phonePlus = `+${finalPhone}`;
       
-      if (finalStatus.status === "COMPLETED") {
-        // 4. Update transaction status and wallet balance
-        const { error: txUpdateError } = await supabase.from('transactions').update({ 
-          status: 'successful',
-          pawapay_ref: finalStatus.payoutId || payoutId,
-          metadata: finalStatus
-        }).eq('id', payoutId);
-        if (txUpdateError) throw new Error(txUpdateError.message || 'Failed to update transaction status.');
+      const { data: recipientData } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .or(`phone.eq.${finalPhone},phone.eq.${phonePlus}`)
+        .maybeSingle();
 
-        const { error: walletError } = await supabase
-          .from('wallets')
-          .update({ balance: walletBalance - amount })
-          .eq('user_id', user.id);
-        if (walletError) throw new Error(walletError.message || 'Failed to decrement wallet balance.');
+      const txId = generateId();
 
-        setWalletBalance((current) => Math.max(current - amount, 0));
-
+      if (recipientData && recipientData.id) {
+        // Internal Transfer
+        await executeWalletTransfer(user.id, amount, 'transfer_out', txId, { recipientPhone: phone, recipientName: recipientData.full_name, note });
+        await executeWalletTransfer(recipientData.id, amount, 'transfer_in', txId, { senderPhone: user.phone, senderName: user.name, note });
+        
         await Promise.all([
-          createNotificationRecord(
-            'disbursement',
-            'Transfer Successful',
-            `You sent ${amount.toLocaleString()} XAF to ${phone}.`
-          ),
-          presentLocalNotification(
-            'Transfer Completed',
-            `You sent ${amount.toLocaleString()} XAF to ${phone}.`
-          ),
+          createNotificationRecord('transfer_out', 'Transfer Sent', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
+          presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${recipientData.full_name}.`),
+          createNotificationRecord('transfer_in', 'Transfer Received', `You received ${amount.toLocaleString()} XAF from ${user.name || user.phone}.`, recipientData.id),
         ]);
-
-        await fetchAppData(user.id);
-        return payoutId;
+        return txId;
       } else {
-        await supabase.from('transactions').update({ 
-          status: 'failed',
-          pawapay_ref: finalStatus.payoutId || payoutId,
-          metadata: finalStatus
-        }).eq('id', payoutId);
-        throw new Error(`Transfer failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+        // External Payout via PawaPay
+        const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+
+        const { error: txError } = await supabase.from('transactions').insert({
+          id: txId, user_id: user.id, amount, type: 'disbursement', status: 'pending', mno_provider: operator
+        });
+        if (txError) throw new Error(txError.message);
+
+        await initiatePayout({ payoutId: txId, phoneNumber: phone, provider, amount, note: note || "Wallet Transfer" });
+        const finalStatus = await pollPayoutUntilFinal(txId);
+        
+        if (finalStatus.status === "COMPLETED") {
+          await executeWalletTransfer(user.id, amount, 'disbursement', txId, finalStatus, operator);
+
+          await Promise.all([
+            createNotificationRecord('disbursement', 'Transfer Successful', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
+            presentLocalNotification('Transfer Completed', `You sent ${amount.toLocaleString()} XAF to ${phone}.`),
+          ]);
+          return txId;
+        } else {
+          await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', txId);
+          throw new Error(`Transfer failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+        }
       }
     } catch (error: any) {
       console.error("[sendMoney] Exception:", error);
@@ -564,6 +634,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           message: `${user.name || 'A member'} has requested to join ${circleData.name}.`,
         }));
         await supabase.from('notifications').insert(notifications);
+
+        // Send push notifications to all admins
+        for (const admin of admins) {
+          try {
+            await notifyAdminOfPendingMember(
+              admin.user_id,
+              user.name || 'A member',
+              circleData.name,
+              circleData.id
+            );
+          } catch (error) {
+            console.warn("Failed to send push notification to admin:", error);
+          }
+        }
       }
 
       await Promise.all([
@@ -585,153 +669,196 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveCircleMember = async (memberId: string) => {
-    const { error } = await supabase.from('circle_members').update({ member_status: 'active' }).eq('id', memberId).eq('member_status', 'pending');
+    // 1. Get the member details to know who to notify
+    const { data: memberData, error: fetchError } = await supabase
+      .from('circle_members')
+      .select('user_id, circle_id, circles(name)')
+      .eq('id', memberId)
+      .single();
+
+    if (fetchError) {
+      console.warn("Could not retrieve member details for approval:", fetchError.message);
+    }
+
+    // 2. Approve the member
+    const { error } = await supabase
+      .from('circle_members')
+      .update({ member_status: 'active' })
+      .eq('id', memberId)
+      .eq('member_status', 'pending');
     if (error) throw new Error(error.message);
+
+    // 3. Create a notification for the approved user
+    if (memberData) {
+      let circleName = "a savings circle";
+      if (memberData.circles) {
+        if (Array.isArray(memberData.circles)) {
+          circleName = memberData.circles[0]?.name || circleName;
+        } else {
+          circleName = (memberData.circles as any).name || circleName;
+        }
+      }
+      const approvedUserId = memberData.user_id;
+
+      // Create notification record
+      await supabase.from("notifications").insert({
+        user_id: approvedUserId,
+        type: "circle_approved",
+        title: "Join Request Approved",
+        message: `Your request to join "${circleName}" has been approved by the admin. You are now an active member!`,
+      });
+
+      // Send push notification to the approved user
+      try {
+        await notifyUserOfApproval(approvedUserId, circleName, memberData.circle_id);
+      } catch (error) {
+        console.warn("Failed to send push notification to approved member:", error);
+      }
+
+      // Present local notification for immediate feedback
+      await presentLocalNotification(
+        "Join Request Approved",
+        `Your request to join "${circleName}" has been approved!`
+      );
+    }
+
     await fetchAppData(user.id);
   };
 
   const payCircleContribution = async (circleId: string) => {
     const circle = circles.find(c => c.id === circleId);
     if (!circle) return;
+    if (circle.contributionAmount > walletBalance) throw new Error("Insufficient wallet balance. Please top up first.");
 
-    const depositId = generateId();
-    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+    const txId = generateId();
 
-    // 1. Insert pending contribution
     const { error: insertError } = await supabase.from('contributions').insert({
       circle_id: circleId,
       user_id: user.id,
-      pawapay_deposit_id: depositId,
+      pawapay_deposit_id: txId,
       amount: circle.contributionAmount,
       cycle_number: circle.currentRound,
-      status: 'PENDING',
+      status: 'COMPLETED',
       due_at: new Date().toISOString()
     });
     if (insertError) throw new Error(insertError.message);
 
-    // 2. Initiate deposit
-    await initiateDeposit({
-      depositId,
-      phoneNumber: user.phone,
-      provider,
-      amount: circle.contributionAmount,
-      note: `Circle ${circle.name} Contribution`
-    });
+    await executeWalletTransfer(user.id, circle.contributionAmount, 'contribution', txId, { circle: circleId });
 
-    // 3. Poll for completion
-    const finalStatus = await pollDepositUntilFinal(depositId);
+    await supabase.from('circle_members')
+      .update({ deposit_status: 'paid' })
+      .eq('circle_id', circleId)
+      .eq('user_id', user.id);
 
-    if (finalStatus.status === "COMPLETED") {
-      // 4. Update status
-      await supabase.from('contributions').update({ 
-        status: 'COMPLETED',
-        paid_at: new Date().toISOString()
-      }).eq('pawapay_deposit_id', depositId);
-      
-      // Update member deposit_status
-      await supabase.from('circle_members')
-        .update({ deposit_status: 'paid' })
-        .eq('circle_id', circleId)
-        .eq('user_id', user.id);
-
-      await fetchAppData(user.id);
-    } else {
-      await supabase.from('contributions').update({ status: 'FAILED' }).eq('pawapay_deposit_id', depositId);
-      throw new Error(`Contribution failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
-    }
+    await fetchAppData(user.id);
   };
 
   const createEscrowContract = async (
-    title: string, desc: string, amount: number, otherParty: string, role: 'buyer' | 'seller'
+    title: string,
+    desc: string,
+    amount: number,
+    otherParty: string,
+    role: "buyer" | "seller"
   ) => {
-    if (role === 'seller') {
-      throw new Error("Only buyers can currently initiate escrow contracts in this demo.");
+    // Parse counterparty input
+    const cleanPhone = otherParty.replace(/[^0-9]/g, "");
+    let formattedPhone = "";
+    if (cleanPhone.length >= 9) {
+      const basePhone = cleanPhone.length === 12 && cleanPhone.startsWith("237") 
+        ? cleanPhone.slice(3) 
+        : cleanPhone.slice(-9);
+      formattedPhone = `+237${basePhone}`;
     }
-    const depositId = generateId();
-    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
 
-    // 1. Initiate lock deposit
-    await initiateDeposit({
-      depositId,
-      phoneNumber: user.phone,
-      provider,
-      amount,
-      note: "Escrow Contract Lock"
-    });
+    let query = supabase.from('users').select('id');
+    if (formattedPhone) {
+      query = query.eq('phone', formattedPhone);
+    } else {
+      query = query.ilike('full_name', otherParty);
+    }
+    
+    const { data: counterpartyUser, error: cpError } = await query.maybeSingle();
+    if (cpError || !counterpartyUser?.id) {
+      throw new Error("Counterparty user not found on MboaPay. Please verify their registered phone number or name.");
+    }
 
-    // 2. Poll for completion
-    const finalStatus = await pollDepositUntilFinal(depositId);
+    const contractId = generateId();
 
-    if (finalStatus.status === "COMPLETED") {
-      const { data: recipient, error: recipientError } = await supabase
-        .from('users')
-        .select('id')
-        .eq('phone', otherParty)
-        .maybeSingle();
-      if (recipientError || !recipient?.id) throw new Error("Recipient not found on MboaPay.");
+    if (role === 'buyer') {
+      if (amount > walletBalance) throw new Error("Insufficient wallet balance. Please top up first.");
 
-      // 3. Create escrow record
+      await executeWalletTransfer(user.id, amount, 'escrow_deposit', contractId, { title });
+
       const { error: insertError } = await supabase.from('escrows').insert({
-        id: depositId,
+        id: contractId,
         sender_id: user.id,
-        recipient_id: recipient.id,
+        recipient_id: counterpartyUser.id,
         amount,
-        description: desc,
+        description: `${title} - ${desc}`,
         status: 'locked'
       });
       if (insertError) throw new Error(insertError.message);
       await fetchAppData(user.id);
     } else {
-      throw new Error(`Escrow lock failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
+      const { error: insertError } = await supabase.from('escrows').insert({
+        id: contractId,
+        sender_id: counterpartyUser.id, // The buyer
+        recipient_id: user.id,          // The seller
+        amount,
+        description: `${title} - ${desc}`,
+        status: 'pending_payment'
+      });
+      if (insertError) throw new Error(insertError.message);
+      await fetchAppData(user.id);
     }
+  };
+
+  const lockEscrowFunds = async (escrowId: string) => {
+    const escrow = escrows.find(e => e.id === escrowId);
+    if (!escrow) throw new Error("Escrow contract not found");
+    if (escrow.amount > walletBalance) throw new Error("Insufficient wallet balance. Please top up first.");
+
+    await executeWalletTransfer(user.id, escrow.amount, 'escrow_deposit', escrowId, { escrow: escrowId });
+
+    const { error: updateError } = await supabase
+      .from('escrows')
+      .update({ status: 'locked' })
+      .eq('id', escrowId);
+    
+    if (updateError) throw new Error(updateError.message);
+    await fetchAppData(user.id);
   };
 
   const releaseEscrowContract = async (escrowId: string) => {
-    const escrow = escrows.find(e => e.id === escrowId);
-    if (!escrow) throw new Error("Escrow not found");
+    const { data: escrowData, error: fetchError } = await supabase.from('escrows').select('*').eq('id', escrowId).single();
+    if (fetchError || !escrowData) throw new Error("Escrow not found");
 
-    const payoutId = generateId();
-    // Assuming recipient is on the same operator for simplicity, or we can use auto-detect
-    const provider = selectedOperator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
+    const releaseId = generateId();
+    await executeWalletTransfer(escrowData.recipient_id, escrowData.amount, 'escrow_release', releaseId, { escrow: escrowId });
 
-    // 1. Initiate Payout to seller
-    await initiatePayout({
-      payoutId,
-      phoneNumber: escrow.otherParty, // The recipient_phone
-      provider,
-      amount: escrow.amount,
-      note: "Escrow Release"
-    });
-
-    // 2. Poll for completion
-    const finalStatus = await pollPayoutUntilFinal(payoutId);
-
-    if (finalStatus.status === "COMPLETED") {
-      await supabase.from('escrows').update({ status: 'released' }).eq('id', escrowId);
-      await fetchAppData(user.id);
-    } else {
-      throw new Error(`Escrow release failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
-    }
+    const { error: updateError } = await supabase
+      .from('escrows')
+      .update({ status: 'released' })
+      .eq('id', escrowId);
+      
+    if (updateError) throw new Error(updateError.message);
+    await fetchAppData(user.id);
   };
 
   const disputeEscrowContract = async (escrowId: string) => {
+    const { data: escrowData, error: fetchError } = await supabase.from('escrows').select('*').eq('id', escrowId).single();
+    if (fetchError || !escrowData) throw new Error("Escrow not found");
+
     const refundId = generateId();
+    await executeWalletTransfer(escrowData.sender_id, escrowData.amount, 'refund', refundId, { escrow: escrowId });
 
-    // 1. Initiate Refund to original buyer
-    await initiateRefund({
-      refundId,
-      depositId: escrowId, // Assuming escrowId is the depositId
-    });
+    const { error: updateError } = await supabase
+      .from('escrows')
+      .update({ status: 'refunded' })
+      .eq('id', escrowId);
 
-    // 2. Poll for completion
-    const finalStatus = await pollRefundUntilFinal(refundId);
-
-    if (finalStatus.status === "COMPLETED") {
-      await supabase.from('escrows').update({ status: 'disputed' }).eq('id', escrowId);
-      await fetchAppData(user.id);
-    } else {
-      throw new Error(`Escrow refund failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
-    }
+    if (updateError) throw new Error(updateError.message);
+    await fetchAppData(user.id);
   };
 
  
@@ -819,12 +946,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateAvatar,
         setOperator,
         topUpWallet,
+        withdrawFunds,
         sendMoney,
         createCircle,
         joinCircleByCode,
         approveCircleMember,
         payCircleContribution,
         createEscrowContract,
+        lockEscrowFunds,
         releaseEscrowContract,
         disputeEscrowContract,
         markNotificationsAsRead,

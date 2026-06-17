@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
@@ -11,8 +11,9 @@ import type { Circle } from "../../context/types";
 
 export default function Circles() {
   const router = useRouter();
-  const { circles } = useApp();
+  const { circles, joinCircleByCode } = useApp();
   const [activeTab, setActiveTab] = useState<"joined" | "explore">("joined");
+  const [joiningId, setJoiningId] = useState<string | null>(null);
 
   const joinedCircles = circles.filter(c => c.isMember);
   const exploreCircles = circles.filter(c => !c.isMember && c.visibility === 'public');
@@ -25,9 +26,27 @@ export default function Circles() {
     router.push("/join-circle");
   };
 
+  const handleDirectJoin = async (circle: Circle) => {
+    setJoiningId(circle.id);
+    try {
+      const result = await joinCircleByCode(circle.code);
+      if (result.success) {
+        Alert.alert("Success", `Successfully joined public group "${circle.name}"!`);
+      } else {
+        console.log(result.message);
+        Alert.alert("Failed to Join", result.message);
+
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to join public group.");
+    } finally {
+      setJoiningId(null);
+    }
+  };
+
   const renderCircleRow = (circle: Circle) => {
-    const isPending = circle.members.some(m => m.name === "You" && m.isPending);
-    
+    const isPending = circle.members.some(m => (m.name === "You" || m.name === "You (Pending)") && m.isPending);
+
     return (
       <TouchableOpacity
         key={circle.id}
@@ -107,89 +126,95 @@ export default function Circles() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        <SafeAreaView>
-      <TopNavBarComponent title="Savings Circles"  tabName="Circles"/>
+      <SafeAreaView>
+        <TopNavBarComponent title="Savings Circles" tabName="Circles" />
 
-      {/* Intro Cards */}
-      <View style={styles.actionHeaderCards}>
-        <TouchableOpacity style={styles.actionCard} onPress={handleCreateCircle} activeOpacity={0.9}>
-          <Card variant="primary" style={styles.innerCard}>
-            <Ionicons name="add-circle" size={32} color="#ffffff" />
-            <Text style={styles.actionCardTitle}>Create Circle</Text>
-            <Text style={styles.actionCardDesc}>Start a new tontine savings group</Text>
-          </Card>
-        </TouchableOpacity>
+        {/* Intro Cards */}
+        <View style={styles.actionHeaderCards}>
+          <TouchableOpacity style={styles.actionCard} onPress={handleCreateCircle} activeOpacity={0.9}>
+            <Card variant="primary" style={styles.innerCard}>
+              <Ionicons name="add-circle" size={32} color="#ffffff" />
+              <Text style={styles.actionCardTitle}>Create Circle</Text>
+              <Text style={styles.actionCardDesc}>Start a new tontine savings group</Text>
+            </Card>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.actionCard} onPress={handleJoinCircle} activeOpacity={0.9}>
-          <Card variant="secondary" style={styles.innerCard}>
-            <Ionicons name="enter" size={32} color="#ffffff" />
-            <Text style={styles.actionCardTitle}>Join Circle</Text>
-            <Text style={styles.actionCardDesc}>Enter an invite code to join savings</Text>
-          </Card>
-        </TouchableOpacity>
-      </View>
-
-      {/* Tabs */}
-      <View style={styles.tabsContainer}>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "joined" && styles.tabButtonActive]}
-          onPress={() => setActiveTab("joined")}
-        >
-          <Text style={[styles.tabText, activeTab === "joined" && styles.tabTextActive]}>My Circles</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tabButton, activeTab === "explore" && styles.tabButtonActive]}
-          onPress={() => setActiveTab("explore")}
-        >
-          <Text style={[styles.tabText, activeTab === "explore" && styles.tabTextActive]}>Explore public</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* List Content */}
-      {activeTab === "joined" ? (
-        <View style={styles.listSection}>
-          {joinedCircles.length > 0 ? (
-            joinedCircles.map(renderCircleRow)
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color={COLORS.outline} />
-              <Text style={styles.emptyTitle}>No circles joined</Text>
-              <Text style={styles.emptySubtitle}>Create your own savings circle or join one using an invite code.</Text>
-            </View>
-          )}
+          <TouchableOpacity style={styles.actionCard} onPress={handleJoinCircle} activeOpacity={0.9}>
+            <Card variant="secondary" style={styles.innerCard}>
+              <Ionicons name="enter" size={32} color="#ffffff" />
+              <Text style={styles.actionCardTitle}>Join Circle</Text>
+              <Text style={styles.actionCardDesc}>Enter an invite code to join savings</Text>
+            </Card>
+          </TouchableOpacity>
         </View>
-      ) : (
-        <View style={styles.exploreSection}>
-          {exploreCircles.length > 0 ? (
-            exploreCircles.map((circle) => (
-              <Card key={circle.id} variant="outlined" style={styles.exploreCard}>
-                <View style={styles.exploreHeader}>
-                  <View style={styles.typeBadgeContainer}>
-                    <Text style={styles.typeBadgeText}>{circle.type.toUpperCase()}</Text>
+
+        {/* Tabs */}
+        <View style={styles.tabsContainer}>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === "joined" && styles.tabButtonActive]}
+            onPress={() => setActiveTab("joined")}
+          >
+            <Text style={[styles.tabText, activeTab === "joined" && styles.tabTextActive]}>My Circles</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabButton, activeTab === "explore" && styles.tabButtonActive]}
+            onPress={() => setActiveTab("explore")}
+          >
+            <Text style={[styles.tabText, activeTab === "explore" && styles.tabTextActive]}>Explore public</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* List Content */}
+        {activeTab === "joined" ? (
+          <View style={styles.listSection}>
+            {joinedCircles.length > 0 ? (
+              joinedCircles.map(renderCircleRow)
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="people-outline" size={48} color={COLORS.outline} />
+                <Text style={styles.emptyTitle}>No circles joined</Text>
+                <Text style={styles.emptySubtitle}>Create your own savings circle or join one using an invite code.</Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.exploreSection}>
+            {exploreCircles.length > 0 ? (
+              exploreCircles.map((circle) => (
+                <Card key={circle.id} variant="outlined" style={styles.exploreCard}>
+                  <View style={styles.exploreHeader}>
+                    <View style={styles.typeBadgeContainer}>
+                      <Text style={styles.typeBadgeText}>{circle.type.toUpperCase()}</Text>
+                    </View>
+                    <Text style={styles.joinText}>Public Pool</Text>
                   </View>
-                  <Text style={styles.joinText}>Public Pool</Text>
-                </View>
-                <Text style={styles.exploreName}>{circle.name}</Text>
-                <Text style={styles.exploreDesc}>A secure community savings pool.</Text>
-                <View style={styles.exploreFooter}>
-                  <Text style={styles.exploreStats}>
-                    {circle.contributionAmount.toLocaleString()} XAF/{circle.frequency === 'daily' ? 'd' : circle.frequency === 'weekly' ? 'wk' : 'mo'} • {circle.membersCount} Members
-                  </Text>
-                  <TouchableOpacity style={styles.exploreJoinButton} onPress={() => router.push({ pathname: "/join-circle", params: { code: circle.code } } as any)}>
-                    <Text style={styles.exploreJoinText}>Join</Text>
-                  </TouchableOpacity>
-                </View>
-              </Card>
-            ))
-          ) : (
-            <View style={styles.emptyContainer}>
-              <Ionicons name="search-outline" size={48} color={COLORS.outline} />
-              <Text style={styles.emptyTitle}>No public circles found</Text>
-              <Text style={styles.emptySubtitle}>There are currently no public savings groups available to join.</Text>
-            </View>
-          )}
-        </View>
-      )}
+                  <Text style={styles.exploreName}>{circle.name}</Text>
+                  <Text style={styles.exploreDesc}>A secure community savings pool.</Text>
+                  <View style={styles.exploreFooter}>
+                    <Text style={styles.exploreStats}>
+                      {circle.contributionAmount.toLocaleString()} XAF/{circle.frequency === 'daily' ? 'd' : circle.frequency === 'weekly' ? 'wk' : 'mo'} • {circle.membersCount} Members
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.exploreJoinButton}
+                      onPress={() => handleDirectJoin(circle)}
+                      disabled={joiningId === circle.id}
+                    >
+                      <Text style={styles.exploreJoinText}>
+                        {joiningId === circle.id ? "Joining..." : "Join"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              ))
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Ionicons name="search-outline" size={48} color={COLORS.outline} />
+                <Text style={styles.emptyTitle}>No public circles found</Text>
+                <Text style={styles.emptySubtitle}>There are currently no public savings groups available to join.</Text>
+              </View>
+            )}
+          </View>
+        )}
       </SafeAreaView>
     </ScrollView>
   );
