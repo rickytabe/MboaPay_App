@@ -627,13 +627,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .eq('role', 'admin');
 
       if (!adminError && admins?.length) {
+        // Create notification records in database
         const notifications = admins.map((admin: any) => ({
           user_id: admin.user_id,
           type: 'circle_join_request',
           title: 'New join request',
           message: `${user.name || 'A member'} has requested to join ${circleData.name}.`,
         }));
-        await supabase.from('notifications').insert(notifications);
+        const { error: notifError } = await supabase.from('notifications').insert(notifications);
+        
+        if (notifError) {
+          console.error("Failed to create notification records for admin:", notifError);
+        }
 
         // Send push notifications to all admins
         for (const admin of admins) {
@@ -645,7 +650,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               circleData.id
             );
           } catch (error) {
-            console.warn("Failed to send push notification to admin:", error);
+            console.error("Failed to send push notification to admin:", error);
           }
         }
       }

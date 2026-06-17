@@ -1,5 +1,5 @@
-import type { Dispatch, SetStateAction } from "react";
 import type { Session } from "@supabase/supabase-js";
+import type { Dispatch, SetStateAction } from "react";
 import { supabase } from "../lib/supabase";
 import type { AppNotification, Circle, Escrow, Transaction, UserProfile } from "./types";
 
@@ -141,7 +141,10 @@ export const loadAppData = async (
   const { data: notifData } = await supabase.from("notifications").select("*").eq("user_id", currentUserId).order("created_at", { ascending: false });
   if (notifData) setNotifications(notifData.map(mapNotification));
 
-  const { data: circlesData, error: circlesError } = await supabase.from("circles").select("*, circle_members(*, users(id, full_name))");
+  const { data: circlesData, error: circlesError } = await supabase
+    .from("circles")
+    .select("*, circle_members(*, users(id, full_name))")
+    .eq("circle_members.user_id", currentUserId);
   if (circlesError) console.error("Circles fetch error:", circlesError);
   if (circlesData) setCircles(circlesData.map((circle: any) => mapCircle(circle, currentUserId)));
 

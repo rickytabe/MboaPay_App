@@ -31,6 +31,19 @@ export default function AdminCircleDetail() {
     (m) => m.name === "You" || m.name === "You (Pending)"
   );
   const userHasPaid = userMember ? userMember.paid : true;
+  const pendingRequests = circle.members.filter((m) => m.isPending && m.role !== "admin");
+
+  const handleApproveMember = async (memberId: string, memberName: string) => {
+    setLoading(true);
+    try {
+      await approveCircleMember(memberId);
+      Alert.alert("Approved", `${memberName} has been approved.`);
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Could not approve member.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePay = async () => {
     setLoading(true);
@@ -176,11 +189,38 @@ export default function AdminCircleDetail() {
         />
       </View>
 
-      {/* Members Section */}
+      {pendingRequests.length > 0 && (
+        <View style={styles.pendingRequestsSection}>
+          <Text style={styles.sectionTitle}>Pending Join Requests</Text>
+          <Card variant="outlined" style={styles.membersCard} noPadding>
+            {pendingRequests.map((member, idx) => (
+              <View key={idx}>
+                <View style={styles.memberRow}>
+                  <View style={styles.memberLeft}>
+                    <Image source={{ uri: member.avatar }} style={styles.memberAvatar} />
+                    <View>
+                      <Text style={styles.memberName}>{member.name}</Text>
+                      <Text style={styles.memberRoleLabel}>Pending approval</Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => member.id && handleApproveMember(member.id, member.name)}
+                    style={styles.approveBtn}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+                {idx < pendingRequests.length - 1 && <View style={styles.divider} />}
+              </View>
+            ))}
+          </Card>
+        </View>
+      )}
+
       <Text style={styles.sectionTitle}>Manage Members ({circle.membersCount}/{circle.maxMembers})</Text>
 
       <Card variant="outlined" style={styles.membersCard} noPadding>
-        {circle.members.map((member, idx) => (
+        {circle.members.filter((member) => !member.isPending).map((member, idx, arr) => (
           <View key={idx}>
             <View style={styles.memberRow}>
               <View style={styles.memberLeft}>
@@ -194,11 +234,7 @@ export default function AdminCircleDetail() {
               </View>
               
               <View style={styles.memberRight}>
-                {member.isPending ? (
-                  <View style={styles.memberPendingBadge}>
-                    <Text style={styles.memberPendingText}>Pending</Text>
-                  </View>
-                ) : member.paid ? (
+                {member.paid ? (
                   <View style={styles.memberPaidBadge}>
                     <Text style={styles.memberPaidText}>Paid</Text>
                   </View>
@@ -207,33 +243,14 @@ export default function AdminCircleDetail() {
                     <Text style={styles.memberUnpaidText}>Awaiting</Text>
                   </View>
                 )}
-                {member.isPending && member.role !== 'admin' ? (
-                  <TouchableOpacity
-                    onPress={async () => {
-                      try {
-                        setLoading(true);
-                        if (member.id) {
-                          await approveCircleMember(member.id);
-                          Alert.alert("Approved", `${member.name} has been approved.`);
-                        }
-                      } catch (e: any) {
-                        Alert.alert("Error", e.message || "Could not approve member.");
-                      } finally {
-                        setLoading(false);
-                      }
-                    }}
-                    style={styles.approveBtn}
-                  >
-                    <Ionicons name="checkmark-circle" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                ) : member.name !== "You" ? (
+                {member.name !== "You" ? (
                   <TouchableOpacity onPress={() => handleKickMember(member.name)} style={styles.kickBtn}>
                     <Ionicons name="close-circle" size={20} color={COLORS.error} />
                   </TouchableOpacity>
                 ) : null}
               </View>
             </View>
-            {idx < circle.members.length - 1 && <View style={styles.divider} />}
+            {idx < arr.length - 1 && <View style={styles.divider} />}
           </View>
         ))}
       </Card>
