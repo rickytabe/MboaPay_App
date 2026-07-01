@@ -497,6 +497,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', depositId);
       throw new Error(`Deposit failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
     }
+  };
+
 
 
   const withdrawFunds = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
