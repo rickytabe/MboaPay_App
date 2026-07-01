@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { Alert, Clipboard, Image, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, Clipboard, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image } from "expo-image";
 import Button from "../../components/Button";
 import Card from "../../components/Card";
 import InitialsAvatar from "../../components/InitialsAvatar";

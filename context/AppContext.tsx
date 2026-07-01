@@ -34,24 +34,7 @@ const INITIAL_USER: UserProfile = {
   isLoggedIn: false,
 };
 
-const getAvatarStorageKey = (userId: string) => `mboa_avatar_${userId}`;
 
-const loadStoredAvatar = async (userId: string): Promise<string | null> => {
-  try {
-    return await AsyncStorage.getItem(getAvatarStorageKey(userId));
-  } catch (e) {
-    console.warn("Error loading stored avatar", e);
-    return null;
-  }
-};
-
-const persistAvatar = async (userId: string, avatarUrl: string) => {
-  try {
-    await AsyncStorage.setItem(getAvatarStorageKey(userId), avatarUrl);
-  } catch (e) {
-    console.warn("Error saving avatar", e);
-  }
-};
 
 const setNotificationHandler = async () => {
 
@@ -121,12 +104,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const syncProfileFromSession = useCallback(async (session: Session | null) => {
     const isComplete = await syncProfileFromSessionHelper(session, setAuthSession, setUser, INITIAL_USER);
-    if (session?.user?.id) {
-      const storedAvatarUrl = await loadStoredAvatar(session.user.id);
-      if (storedAvatarUrl) {
-        setUser((prev) => ({ ...prev, avatarUrl: storedAvatarUrl }));
-      }
-    }
     return isComplete;
   }, []);
 
@@ -365,9 +342,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (profileError) throw new Error(profileError.message);
     if (!updatedProfile) throw new Error("Profile row not found. Run auth_trigger.sql in Supabase, then try again.");
 
-    if (avatarUrl) {
-      await persistAvatar(currentSession.user.id, avatarUrl);
-    }
 
     const { error: metadataError } = await supabase.auth.updateUser({
       data: { full_name: trimmedName, email: trimmedEmail || null, avatar_url: avatarUrl || null, phone: phone || null },

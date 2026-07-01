@@ -6,7 +6,6 @@ import React, { useRef } from "react";
 import {
   Alert,
   Animated,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +13,7 @@ import {
   View,
   Switch,
 } from "react-native";
+import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import InitialsAvatar from "../components/InitialsAvatar";
 import { LIGHT_COLORS, ROUNDED, SPACING } from "../constants/Theme";
@@ -309,7 +309,7 @@ export default function Profile() {
 
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 }}>
           <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Powered by pawaPay</Text>
-          <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, resizeMode: 'contain', marginLeft: -12 }} />
+          <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, marginLeft: -12 }} contentFit="contain" />
         </View>
       </ScrollView>
     </View>
