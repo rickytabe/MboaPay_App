@@ -489,10 +489,12 @@ export default function CreateCircle() {
             <Text style={styles.successSubtitle}>
               {circleType === 'solo' 
                 ? `${successData?.name} is ready. You can now start saving towards your goal!` 
-                : `${successData?.name} is ready. Share this invite code with the members you want to join.`}
+                : visibility === 'public'
+                  ? `${successData?.name} is ready. It will now appear in the Explore tab for other users to find and join.`
+                  : `${successData?.name} is ready. Share this invite code with the members you want to join.`}
             </Text>
 
-            {circleType !== 'solo' && (
+            {circleType !== 'solo' && visibility === 'private' && (
               <View style={styles.codeBox}>
                 <Text style={styles.codeText}>{successData?.code}</Text>
                 

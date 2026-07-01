@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,10 +10,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
+import { Image as ExpoImage } from "expo-image";
 import { LIGHT_COLORS } from "../constants/Theme";
 import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 import * as Haptics from "expo-haptics";
-import { Image } from "react-native";
 import { useApp } from "../context/AppContext";
 import InitialsAvatar from "./InitialsAvatar";
 
@@ -21,8 +21,9 @@ const { width } = Dimensions.get("window");
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { user, colors, theme } = useApp();
+  const { user, colors } = useApp();
   const styles = getStyles(colors);
+  const [avatarLoadFailed, setAvatarLoadFailed] = useState(false);
   
   const TAB_BAR_HEIGHT = 65;
   // Add 30px of extra height at the top for the elevated button container
@@ -36,6 +37,12 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 
   const walletRoute = state.routes[2];
   const isWalletFocused = state.index === 2;
+  const shouldShowAvatar = Boolean(user?.avatarUrl) && !avatarLoadFailed;
+  const avatarKey = `${user?.avatarUrl || "empty"}-${state.index}`;
+
+  useEffect(() => {
+    setAvatarLoadFailed(false);
+  }, [user?.avatarUrl]);
 
   // Background SVG Path with curved cutout (notch) - Shifted down by 30px
   const dBackground = `
@@ -173,14 +180,24 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
               <Animated.View style={{ transform: [{ scale: tabScales[index] }] }}>
                 {route.name === "profile" ? (
                   <View style={[
-                    { width: 28, height: 28, borderRadius: 14, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+                    styles.profileAvatarFrame,
                     isFocused && { borderWidth: 2, borderColor: colors.primaryContainer }
                   ]}>
-                    {user?.avatarUrl ? (
-                      <Image source={{ uri: user.avatarUrl }} style={{ width: "100%", height: "100%" }} />
-                    ) : (
-                      <InitialsAvatar name={user?.name || ""} size={isFocused ? 24 : 28} />
-                    )}
+                    <InitialsAvatar name={user?.name || ""} size={isFocused ? 24 : 28} />
+                    {shouldShowAvatar ? (
+                      <ExpoImage
+                        key={avatarKey}
+                        source={{ uri: user.avatarUrl }}
+                        style={[
+                          styles.profileAvatarImage,
+                          isFocused && styles.profileAvatarImageFocused,
+                        ]}
+                        contentFit="cover"
+                        cachePolicy="memory-disk"
+                        recyclingKey={avatarKey}
+                        onError={() => setAvatarLoadFailed(true)}
+                      />
+                    ) : null}
                   </View>
                 ) : (
                   <Ionicons
@@ -265,6 +282,26 @@ const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     fontWeight: "700",
+  },
+  profileAvatarFrame: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: colors.primaryContainer,
+  },
+  profileAvatarImage: {
+    position: "absolute",
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "transparent",
+  },
+  profileAvatarImageFocused: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   floatingButtonContainer: {
     position: "absolute",

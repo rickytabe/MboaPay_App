@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useApp } from "../context/AppContext";
@@ -126,6 +127,24 @@ export default function Login() {
             loading={isSubmitting}
             type="primary"
           />
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 }}>
+          <Text style={{ fontSize: 14, color: colors.onSurfaceVariant }}>Don't have an account? </Text>
+          <TouchableOpacity onPress={() => router.push("/register")} activeOpacity={0.7} disabled={isSubmitting}>
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.primaryContainer }}>Sign up</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 16 }}>
+          <TouchableOpacity onPress={() => router.replace("/")} activeOpacity={0.7} disabled={isSubmitting}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceVariant, textDecorationLine: 'underline' }}>Return to Onboarding</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: "auto", paddingBottom: 24, paddingTop: 40 }}>
+          <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Powered by pawaPay</Text>
+          <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, resizeMode: 'contain', marginLeft: -12 }} />
         </View>
       </View>
     </KeyboardAvoidingView>

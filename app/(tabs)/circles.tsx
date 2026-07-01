@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, Animated, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
+import CircleCardComponent from "../../components/CircleCardComponent";
 import InitialsAvatar from "../../components/InitialsAvatar";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
 import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
@@ -52,16 +53,16 @@ export default function Circles() {
   const joinedCircles = circles
     .filter((c) => c.isMember)
     .sort((a, b) => {
-      const timeA = new Date(a.joinedAt || a.createdAt || 0).getTime();
-      const timeB = new Date(b.joinedAt || b.createdAt || 0).getTime();
-      return timeA - timeB;
+      const timeA = Math.max(new Date(a.joinedAt || a.createdAt || 0).getTime(), new Date(a.updatedAt || 0).getTime());
+      const timeB = Math.max(new Date(b.joinedAt || b.createdAt || 0).getTime(), new Date(b.updatedAt || 0).getTime());
+      return timeB - timeA;
     });
   
   const exploreCircles = circles
     .filter((c) => !c.isMember && c.visibility === "public")
     .sort((a, b) => {
-      const timeA = new Date(a.createdAt || 0).getTime();
-      const timeB = new Date(b.createdAt || 0).getTime();
+      const timeA = Math.max(new Date(a.createdAt || 0).getTime(), new Date(a.updatedAt || 0).getTime());
+      const timeB = Math.max(new Date(b.createdAt || 0).getTime(), new Date(b.updatedAt || 0).getTime());
       return timeB - timeA;
     });
 
@@ -89,97 +90,6 @@ export default function Circles() {
     } finally {
       setJoiningId(null);
     }
-  };
-
-  const renderCircleRow = (circle: Circle) => {
-    const isPending = circle.members.some(m => (m.name === "You" || m.name === "You (Pending)") && m.isPending);
-
-    return (
-      <TouchableOpacity
-        key={circle.id}
-        activeOpacity={0.95}
-        onPress={() => {
-          if (circle.isTreasurer) {
-            router.push({ pathname: "/admin-circle/[id]", params: { id: circle.id } } as any);
-          } else {
-            router.push({ pathname: "/circle-detail/[id]", params: { id: circle.id } } as any);
-          }
-        }}
-      >
-        <Card variant="elevated" style={styles.circleRowCard}>
-          <View style={styles.cardHeader}>
-            <View>
-              <View style={styles.typeBadgeContainer}>
-                <Text style={styles.typeBadgeText}>{circle.type.toUpperCase()}</Text>
-                {circle.isTreasurer && (
-                  <View style={styles.treasurerBadge}>
-                    <Text style={styles.treasurerBadgeText}>Treasurer</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={styles.circleName}>{circle.name}</Text>
-              <Text style={styles.circleCode}>Code: {circle.code}</Text>
-            </View>
-
-            {isPending ? (
-              <View style={styles.dueBadge}>
-                <Text style={styles.dueText}>Due</Text>
-              </View>
-            ) : (
-              <View style={styles.paidBadge}>
-                <Text style={styles.paidText}>Paid</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.cardStats}>
-            <View style={styles.statGroup}>
-              <Text style={styles.statLabel}>Contribution</Text>
-              <Text style={styles.statValue}>{circle.contributionAmount.toLocaleString()} XAF</Text>
-            </View>
-            <View style={styles.statGroup}>
-              <Text style={styles.statLabel}>Frequency</Text>
-              <Text style={styles.statValue}>{circle.frequency}</Text>
-            </View>
-            <View style={styles.statGroup}>
-              <Text style={styles.statLabel}>Target Pool</Text>
-              <Text style={styles.statValue}>{circle.goalAmount.toLocaleString()} XAF</Text>
-            </View>
-          </View>
-
-          <View style={styles.cardFooter}>
-            <Text style={styles.payoutTimeline}>
-              <Ionicons name="time-outline" size={13} color={colors.secondary} /> {circle.nextPayoutDate}
-            </Text>
-            {circle.rawType !== 'solo' ? (
-              <View style={styles.avatarsList}>
-                {circle.members.slice(0, 3).map((m, idx) => (
-                  <View key={idx} style={{ marginLeft: idx > 0 ? -10 : 0 }}>
-                    {m.avatar ? (
-                      <Image
-                        source={{ uri: m.avatar }}
-                        style={styles.memberAvatar}
-                      />
-                    ) : (
-                      <InitialsAvatar name={m.name} size={24} />
-                    )}
-                  </View>
-                ))}
-                {circle.membersCount > 3 && (
-                  <View style={styles.moreAvatarsBadge}>
-                    <Text style={styles.moreAvatarsText}>+{circle.membersCount - 3}</Text>
-                  </View>
-                )}
-              </View>
-            ) : (
-              <View style={{ flex: 1, marginLeft: 16, height: 6, backgroundColor: colors.surfaceContainer, borderRadius: ROUNDED.full, overflow: 'hidden' }}>
-                <View style={{ width: `${Math.min(100, ((circle.totalContributed || 0) / (circle.goalAmount || 1)) * 100)}%`, height: '100%', backgroundColor: colors.secondary }} />
-              </View>
-            )}
-          </View>
-        </Card>
-      </TouchableOpacity>
-    );
   };
 
   return (
@@ -231,7 +141,7 @@ export default function Circles() {
         ) : activeTab === "joined" ? (
           <View style={styles.listSection}>
             {joinedCircles.length > 0 ? (
-              joinedCircles.map(renderCircleRow)
+              joinedCircles.map(c => <CircleCardComponent key={c.id} circle={c} colors={colors} fullWidth={true} />)
             ) : (
               <View style={styles.emptyContainer}>
                 <Ionicons name="people-outline" size={48} color={colors.outline} />

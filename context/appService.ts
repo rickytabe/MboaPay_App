@@ -92,6 +92,8 @@ const mapEscrow = (escrow: any, currentUserId: string): Escrow => {
   const otherUser = isBuyer ? escrow.recipient : escrow.sender;
   return {
     id: escrow.id,
+    senderId: escrow.sender_id,
+    recipientId: escrow.recipient_id,
     title: escrow.description || "Escrow Contract",
     description: escrow.description || "",
     role: isBuyer ? "buyer" : "seller",
@@ -99,6 +101,10 @@ const mapEscrow = (escrow: any, currentUserId: string): Escrow => {
     otherParty: otherUser?.full_name || otherUser?.phone || (isBuyer ? "Seller" : "Buyer"),
     otherPartyPhone: otherUser?.phone || "",
     status: escrow.status,
+    senderConfirm: escrow.sender_confirm || "pending",
+    recipientConfirm: escrow.recipient_confirm || "pending",
+    pawapayDepositId: escrow.pawapay_deposit_id,
+    pawapayPayoutId: escrow.pawapay_payout_id,
     date: formatTimestamp(escrow.created_at),
     code: escrow.id.substring(0, 8).toUpperCase(),
     created_at: escrow.created_at,

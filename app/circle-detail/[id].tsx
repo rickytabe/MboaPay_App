@@ -66,6 +66,11 @@ export default function CircleDetail() {
         return data?.signedUrl || avatarUrl;
       };
 
+      // Fetch the circle type directly from DB to avoid stale closure issues
+      const { data: circleRow } = await supabase.from('circles').select('circle_type, target_amount').eq('id', circleId).single();
+      const circleType = circleRow?.circle_type as string | undefined;
+      const targetAmount = circleRow?.target_amount || 0;
+
       // 1. Fetch Contributions & Disbursements for Activity
       const { data: contribs } = await supabase.from('contributions').select('*, circle_members(user_id, users(full_name, avatar_url))').eq('circle_id', circleId).order('created_at', { ascending: false });
       const { data: disburse } = await supabase.from('disbursements').select('*, users(full_name, avatar_url)').eq('circle_id', circleId).order('created_at', { ascending: false });
@@ -95,11 +100,11 @@ export default function CircleDetail() {
       setActivities(mappedActivity);
 
       // 2. Fetch Leaderboard (Pool / Solo)
-      if (circle?.rawType === 'pool' || circle?.rawType === 'solo') {
+      if (circleType === 'pool' || circleType === 'solo') {
         const memberTotals = new Map<string, number>();
         let totalPool = 0;
         (contribs || []).forEach((c: any) => {
-          if (c.status === 'successful') {
+          if (c.status === 'successful' || c.status === 'COMPLETED') {
             const memberId = c.member_id;
             memberTotals.set(memberId, (memberTotals.get(memberId) || 0) + Number(c.amount));
             totalPool += Number(c.amount);
@@ -109,13 +114,16 @@ export default function CircleDetail() {
 
         const { data: members } = await supabase.from('circle_members').select('id, user_id, users(full_name, avatar_url)').eq('circle_id', circleId);
         
-        let board = await Promise.all((members || []).map(async (m: any) => ({
-          memberId: m.id,
-          userId: m.user_id,
-          name: m.user_id === user.id ? 'You' : (m.users?.full_name || 'Member'),
-          avatar: await resolveAvatar(m.users?.avatar_url),
-          total: memberTotals.get(m.id) || 0,
-        })));
+        const board = await Promise.all((members || []).map(async (m: any) => {
+          const uData = Array.isArray(m.users) ? m.users[0] : m.users;
+          return {
+            ...m,
+            userId: m.user_id,
+            name: m.user_id === user.id ? 'You' : (uData?.full_name || 'Member'),
+            avatar: await resolveAvatar(uData?.avatar_url),
+            total: memberTotals.get(m.id) || 0,
+          };
+        }));
         board.sort((a, b) => b.total - a.total);
 
         setLeaderboard(board);
@@ -125,7 +133,7 @@ export default function CircleDetail() {
       }
 
       // 3. Fetch Round Data (Rotation)
-      if (circle?.rawType === 'rotation') {
+      if (circleType === 'rotation') {
         const currentRound = disburse && disburse.length > 0 ? (disburse[0].round_number || 0) + 1 : 1;
         
         const { data: members } = await supabase.from('circle_members')
@@ -135,18 +143,21 @@ export default function CircleDetail() {
           .order('rotation_order', { ascending: true });
 
         const activeMembers = members || [];
-        const paidThisRound = (contribs || []).filter(c => Number(c.cycle_number) === Number(currentRound) && c.status === 'successful');
+        const paidThisRound = (contribs || []).filter(c => Number(c.cycle_number) === Number(currentRound) && (c.status === 'successful' || c.status === 'COMPLETED'));
         const paidSet = new Set(paidThisRound.map(c => c.member_id));
 
         const zeroIndex = (currentRound - 1) % (activeMembers.length || 1);
         const recipient = activeMembers[zeroIndex];
 
-        const roundMem = await Promise.all(activeMembers.map(async m => ({
-          ...m,
-          name: m.user_id === user.id ? 'You' : (m.users?.full_name || 'Member'),
-          avatar: await resolveAvatar(m.users?.avatar_url),
-          hasPaid: paidSet.has(m.id)
-        })));
+        const roundMem = await Promise.all(activeMembers.map(async (m: any) => {
+          const uData = Array.isArray(m.users) ? m.users[0] : m.users;
+          return {
+            ...m,
+            name: m.user_id === user.id ? 'You' : (uData?.full_name || 'Member'),
+            avatar: await resolveAvatar(uData?.avatar_url),
+            hasPaid: paidSet.has(m.id)
+          };
+        }));
 
         setRoundData({
           members: roundMem,
@@ -250,11 +261,13 @@ export default function CircleDetail() {
             </View>
           )}
         </View>
-        <TouchableOpacity onPress={handleCopyCode} style={styles.codeContainer}>
-          <Text style={styles.codeLabel}>Invite Code:</Text>
-          <Text style={styles.codeText}>{circle.code}</Text>
-          <Ionicons name="copy-outline" size={14} color={colors.primaryContainer} />
-        </TouchableOpacity>
+        {!isSolo && (
+          <TouchableOpacity onPress={handleCopyCode} style={styles.codeContainer}>
+            <Text style={styles.codeLabel}>Invite Code:</Text>
+            <Text style={styles.codeText}>{circle.code}</Text>
+            <Ionicons name="copy-outline" size={14} color={colors.primaryContainer} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Shared Stats Block */}
@@ -285,6 +298,12 @@ export default function CircleDetail() {
       {/* TAB: OVERVIEW */}
       {activeTab === "Overview" && (
         <View style={styles.tabContent}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 10 }}>
+            <TouchableOpacity onPress={() => fetchCircleData()} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name="refresh" size={14} color={colors.primaryContainer} />
+              <Text style={{ color: colors.primaryContainer, fontSize: 12, fontWeight: '700' }}>Refresh Data</Text>
+            </TouchableOpacity>
+          </View>
           {isPendingMember ? (
             <View style={styles.pendingInfoBox}>
               <Ionicons name="time-outline" size={20} color={colors.primary} />
@@ -362,12 +381,22 @@ export default function CircleDetail() {
                 {leaderboard.map((m, idx) => (
                   <View key={m.memberId}>
                     <View style={[styles.memberRow, m.userId === user.id && styles.myHighlightRow]}>
-                      <View style={styles.memberLeft}>
+                      <View style={[styles.memberLeft, { flex: 1 }]}>
                          <Text style={[styles.rankText, idx === 0 && styles.amberText]}>#{idx + 1}</Text>
                          {m.avatar ? <Image source={{ uri: m.avatar }} style={styles.memberAvatar} /> : <InitialsAvatar name={m.name} size={36} />}
-                         <View>
-                           <Text style={styles.memberName}>{m.name}</Text>
-                           <Text style={styles.statLabel}>{m.total.toLocaleString()} XAF</Text>
+                         <View style={{ flex: 1 }}>
+                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                             <Text style={styles.memberName}>{m.name}</Text>
+                             <Text style={styles.statLabel}>{m.total.toLocaleString()} XAF</Text>
+                           </View>
+                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                             <View style={[styles.progressBarBg, { flex: 1, height: 6 }]}>
+                               <View style={[styles.progressBarFill, { width: `${Math.min(100, circle.goalAmount > 0 ? (m.total / circle.goalAmount) * 100 : 0)}%` }]} />
+                             </View>
+                             <Text style={{ fontSize: 10, color: colors.onSurfaceVariant, fontWeight: '700' }}>
+                               {circle.goalAmount > 0 ? ((m.total / circle.goalAmount) * 100).toFixed(0) : 0}%
+                             </Text>
+                           </View>
                          </View>
                       </View>
                     </View>

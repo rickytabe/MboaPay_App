@@ -12,23 +12,28 @@ import type { Escrow } from "../../context/types";
 
 export default function EscrowHome() {
   const router = useRouter();
-  const { escrows, colors, theme } = useApp();
+  const { escrows, colors } = useApp();
   const styles = getStyles(colors);
 
   const buyerLocked = escrows
-    .filter((e) => e.role === "buyer" && e.status === "locked")
+    .filter((e) => e.role === "buyer" && e.status === "locked" && e.pawapayDepositId)
     .reduce((sum, e) => sum + e.amount, 0);
 
   const sellerLocked = escrows
-    .filter((e) => e.role === "seller" && (e.status === "locked" || e.status === "pending_payment"))
+    .filter((e) => e.role === "seller" && e.status === "locked" && e.pawapayDepositId)
     .reduce((sum, e) => sum + e.amount, 0);
 
-  const getStatusBadgeStyle = (status: string) => {
-    switch (status) {
+  const getStatusBadgeStyle = (item: Escrow) => {
+    if (item.status === "locked" && !item.pawapayDepositId) {
+      return { container: styles.pendingBadge, text: styles.pendingText, label: "Awaiting Pay" };
+    }
+    if (item.status === "locked" && item.recipientConfirm === "confirmed") {
+      return { container: styles.pendingBadge, text: styles.pendingText, label: "Release Req" };
+    }
+
+    switch (item.status) {
       case "locked":
         return { container: styles.lockedBadge, text: styles.lockedText, label: "Secured" };
-      case "pending_payment":
-        return { container: styles.pendingBadge, text: styles.pendingText, label: "Awaiting Pay" };
       case "disputed":
         return { container: styles.disputedBadge, text: styles.disputedText, label: "Disputed" };
       case "released":
@@ -41,7 +46,7 @@ export default function EscrowHome() {
   };
 
   const renderEscrowRow = (item: Escrow) => {
-    const badge = getStatusBadgeStyle(item.status);
+    const badge = getStatusBadgeStyle(item);
     
     return (
       <TouchableOpacity

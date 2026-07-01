@@ -54,7 +54,7 @@ export default function JoinCircle() {
 
             <TextInput
               style={styles.input}
-              placeholder="e.g. TONT-7B93"
+              placeholder="e.g. CA5LFE"
               placeholderTextColor={COLORS.outline}
               autoCapitalize="characters"
               autoCorrect={false}

@@ -4,6 +4,7 @@ import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
+import CircleCardComponent from "../../components/CircleCardComponent";
 import TopNavBarComponent from "../../components/TopNavBarComponent";
 import { LIGHT_COLORS, ROUNDED, SPACING } from "../../constants/Theme";
 import { useApp } from "../../context/AppContext";
@@ -16,76 +17,8 @@ export default function Home() {
   const { user, walletBalance, transactions, circles, colors, theme } = useApp();
   const styles = getStyles(colors);
 
-  const getCircleIcon = (name: string) => {
-    const lowerName = name.toLowerCase();
-    if (lowerName.includes("trip") || lowerName.includes("travel") || lowerName.includes("vacation") || lowerName.includes("family")) {
-      return "airplane-outline" as const;
-    }
-    if (lowerName.includes("market") || lowerName.includes("trader") || lowerName.includes("business") || lowerName.includes("group")) {
-      return "briefcase-outline" as const;
-    }
-    return "cash-outline" as const;
-  };
-
   const renderCircleCard = (circle: Circle) => {
-    // Calculate progress based on paid members
-    const paidCount = circle.members.filter((m) => m.paid).length;
-    const currentRoundSaved = paidCount * circle.contributionAmount;
-    
-    // Progress relative to goal
-    const progress = circle.goalAmount > 0 ? currentRoundSaved / circle.goalAmount : 0.4;
-    const progressPercent = Math.min(Math.max(progress * 100, 8), 100);
-
-    return (
-      <TouchableOpacity
-        key={circle.id}
-        activeOpacity={0.9}
-        onPress={() => router.push(`/circle-detail/${circle.id}`)}
-        style={styles.circleCardWrapper}
-      >
-        <Card style={styles.circleCard} variant="outlined" noPadding>
-          <View style={circle.membersCount === 0 ? styles.circleCardContent : styles.circleCardContent}>
-            {/* Header info inside circle card */}
-            <View style={styles.circleCardHeader}>
-              <View style={styles.circleIconContainer}>
-                <Ionicons name={getCircleIcon(circle.name)} size={18} color={colors.primary} />
-                <Text style={styles.circleCardName} numberOfLines={1}>
-                  {circle.name}
-                </Text>
-              </View>
-              <Text style={styles.circleCardMembers}>
-                {circle.membersCount}/{circle.maxMembers} members
-              </Text>
-            </View>
-
-            {/* Middle Section: Progress and Balances */}
-            <View style={styles.circleCardProgressSection}>
-              <View style={styles.circleCardBalances}>
-                <Text style={styles.circleCardCurrentBalance}>
-                  {currentRoundSaved.toLocaleString()} XAF
-                </Text>
-                <Text style={styles.circleCardGoalBalance}>
-                  Goal: {(circle.goalAmount / 1000).toFixed(0)}k
-                </Text>
-              </View>
-
-              {/* Custom Progress Bar */}
-              <View style={styles.progressBarBg}>
-                <View style={[styles.progressBarFill, { width: `${progressPercent}%` }]} />
-              </View>
-            </View>
-
-            {/* Bottom Row */}
-            <View style={styles.circleCardFooter}>
-              <Text style={styles.circleCardPrepayLabel}>Next payout</Text>
-              <Text style={styles.circleCardPrepayDate}>
-                {circle.nextPayoutDate.replace("In ", "").split(" (")[0]}
-              </Text>
-            </View>
-          </View>
-        </Card>
-      </TouchableOpacity>
-    );
+    return <CircleCardComponent key={circle.id} circle={circle} colors={colors} />;
   };
 
   const renderTransactionRow = (item: Transaction, isLast: boolean) => {

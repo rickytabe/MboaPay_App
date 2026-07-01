@@ -306,6 +306,11 @@ export default function Profile() {
         </TouchableOpacity>
 
         <Text style={styles.versionText}>MboaPay v1.0.0</Text>
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 }}>
+          <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Powered by pawaPay</Text>
+          <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, resizeMode: 'contain', marginLeft: -12 }} />
+        </View>
       </ScrollView>
     </View>
   );
@@ -315,6 +320,7 @@ const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
+    marginBottom:20
   },
   heroBackground: {
     height: 180,

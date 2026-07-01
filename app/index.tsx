@@ -259,6 +259,10 @@ export default function Index() {
             <Text style={styles.nextText}>{isLastSlide ? "START" : "NEXT"}</Text>
           </TouchableOpacity>
         </View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 24 }}>
+          <Text style={{ fontSize: 12, color: COLORS.onSurfaceVariant }}>Powered by pawaPay</Text>
+          <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, resizeMode: 'contain', marginLeft: -12 }} />
+        </View>
       </View>
     </View>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, ScrollView, Alert } from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useApp } from "../../context/AppContext";
 import { COLORS, TYPOGRAPHY, SPACING, ROUNDED } from "../../constants/Theme";
@@ -9,9 +9,8 @@ import Card from "../../components/Card";
 import Button from "../../components/Button";
 
 export default function EscrowDetail() {
-  const router = useRouter();
   const params = useLocalSearchParams();
-  const { escrows, lockEscrowFunds, releaseEscrowContract, disputeEscrowContract } = useApp();
+  const { escrows, lockEscrowFunds, requestEscrowRelease, releaseEscrowContract, disputeEscrowContract } = useApp();
   const [loading, setLoading] = useState(false);
 
   const escrowId = params.id as string;
@@ -41,7 +40,7 @@ export default function EscrowDetail() {
   const handleRelease = async () => {
     Alert.alert(
       "Confirm Fund Release",
-      "Are you sure you want to release the protected funds directly to the seller? This action is irreversible.",
+      "Approve the seller's release request only if delivery is complete. The funds will move to the seller and this action is irreversible.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -62,10 +61,34 @@ export default function EscrowDetail() {
     );
   };
 
+  const handleRequestRelease = () => {
+    Alert.alert(
+      "Request Fund Release",
+      "Confirm that you have delivered the goods or service. The buyer will be asked to approve release or open a dispute.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Request Release",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              await requestEscrowRelease(escrowId);
+              Alert.alert("Release Requested", "The buyer has been asked to review and approve the escrow release.");
+            } catch (e: any) {
+              Alert.alert("Error", e.message || "Failed to request release.");
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleDispute = () => {
     Alert.alert(
-      "File Dispute",
-      "Are you sure you want to pause this agreement and initiate dispute resolution? The funds will remain locked.",
+      "Open Dispute",
+      "This will reject the release request and freeze the escrow for review. Funds will not be refunded automatically.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -87,11 +110,16 @@ export default function EscrowDetail() {
   };
 
   const getStatusLabel = (status: string) => {
+    if (status === "locked" && !contract.pawapayDepositId) {
+      return "AWAITING FUNDING";
+    }
+    if (status === "locked" && contract.recipientConfirm === "confirmed") {
+      return "RELEASE REQUESTED";
+    }
+
     switch (status) {
       case "locked":
         return "SECURED & ESCROWED";
-      case "pending_payment":
-        return "AWAITING FUNDING";
       case "disputed":
         return "UNDER DISPUTE";
       case "released":
@@ -104,6 +132,9 @@ export default function EscrowDetail() {
   };
 
   const isBuyer = contract.role === "buyer";
+  const isSeller = contract.role === "seller";
+  const isFunded = Boolean(contract.pawapayDepositId);
+  const hasReleaseRequest = contract.recipientConfirm === "confirmed";
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
@@ -147,32 +178,32 @@ export default function EscrowDetail() {
         <Text style={styles.sectionTitle}>Milestone Tracker</Text>
 
         <View style={styles.stepRow}>
-          <View style={[styles.stepDot, contract.status !== "pending_payment" && styles.stepDotActive]}>
-            {contract.status !== "pending_payment" ? (
+          <View style={[styles.stepDot, isFunded && styles.stepDotActive]}>
+            {isFunded ? (
               <Ionicons name="checkmark" size={12} color="#ffffff" />
             ) : (
               <Text style={styles.stepNum}>1</Text>
             )}
           </View>
           <View style={styles.stepInfo}>
-            <Text style={[styles.stepTitle, contract.status !== "pending_payment" && styles.stepTextActive]}>
+            <Text style={[styles.stepTitle, isFunded && styles.stepTextActive]}>
               Funds Locked
             </Text>
             <Text style={styles.stepDesc}>Buyer deposits the amount in MboaPay Escrow protection vault</Text>
           </View>
         </View>
 
-        <View style={[styles.stepConnector, contract.status !== "pending_payment" && styles.stepConnectorActive]} />
+        <View style={[styles.stepConnector, isFunded && styles.stepConnectorActive]} />
 
         <View style={styles.stepRow}>
           <View
             style={[
               styles.stepDot,
-              (contract.status === "locked" || contract.status === "disputed" || contract.status === "released") &&
+              hasReleaseRequest &&
                 styles.stepDotActive,
             ]}
           >
-            {contract.status === "released" ? (
+            {hasReleaseRequest ? (
               <Ionicons name="checkmark" size={12} color="#ffffff" />
             ) : (
               <Text style={styles.stepNum}>2</Text>
@@ -182,13 +213,13 @@ export default function EscrowDetail() {
             <Text
               style={[
                 styles.stepTitle,
-                (contract.status === "locked" || contract.status === "disputed" || contract.status === "released") &&
+                hasReleaseRequest &&
                   styles.stepTextActive,
               ]}
             >
-              Delivery &amp; Verification
+              Seller Release Request
             </Text>
-            <Text style={styles.stepDesc}>Seller delivers goods; buyer verifies and inspects quality</Text>
+            <Text style={styles.stepDesc}>Seller marks delivery complete and asks the buyer to review</Text>
           </View>
         </View>
 
@@ -200,9 +231,9 @@ export default function EscrowDetail() {
           </View>
           <View style={styles.stepInfo}>
             <Text style={[styles.stepTitle, contract.status === "released" && styles.stepTextActive]}>
-              Release Funds
+              Buyer Decision
             </Text>
-            <Text style={styles.stepDesc}>Buyer triggers release; seller receives cash immediately</Text>
+            <Text style={styles.stepDesc}>Buyer approves release or opens a dispute; no automatic refund on rejection</Text>
           </View>
         </View>
       </Card>
@@ -220,7 +251,7 @@ export default function EscrowDetail() {
 
       {/* Actions */}
       <View style={styles.actionsContainer}>
-        {contract.status === "pending_payment" && isBuyer && (
+        {contract.status === "locked" && isBuyer && !isFunded && (
           <Button
             title={`Lock Funds (${contract.amount.toLocaleString()} XAF)`}
             onPress={handleLockFunds}
@@ -229,16 +260,52 @@ export default function EscrowDetail() {
           />
         )}
 
-        {contract.status === "locked" && isBuyer && (
+        {contract.status === "locked" && isSeller && isFunded && !hasReleaseRequest && (
+          <Button
+            title="Request Release from Buyer"
+            onPress={handleRequestRelease}
+            loading={loading}
+            type="primary"
+          />
+        )}
+
+        {contract.status === "locked" && isSeller && !isFunded && (
+          <View style={styles.pendingInfoBox}>
+            <Ionicons name="time-outline" size={22} color={COLORS.tertiary} />
+            <Text style={styles.pendingInfoText}>
+              Waiting for the buyer to lock funds. You can request release after the escrow is funded and delivery is complete.
+            </Text>
+          </View>
+        )}
+
+        {contract.status === "locked" && isSeller && isFunded && hasReleaseRequest && (
+          <View style={styles.pendingInfoBox}>
+            <Ionicons name="hourglass-outline" size={22} color={COLORS.tertiary} />
+            <Text style={styles.pendingInfoText}>
+              Release request sent. The buyer can approve release or open a dispute. Funds remain locked until then.
+            </Text>
+          </View>
+        )}
+
+        {contract.status === "locked" && isBuyer && isFunded && !hasReleaseRequest && (
+          <View style={styles.pendingInfoBox}>
+            <Ionicons name="shield-checkmark-outline" size={22} color={COLORS.tertiary} />
+            <Text style={styles.pendingInfoText}>
+              Funds are locked. Wait for the seller to request release after delivery.
+            </Text>
+          </View>
+        )}
+
+        {contract.status === "locked" && isBuyer && isFunded && hasReleaseRequest && (
           <View style={styles.buyerActionGroup}>
             <Button
-              title="Release Funds to Seller"
+              title="Approve Release to Seller"
               onPress={handleRelease}
               loading={loading}
               type="primary"
             />
             <Button
-              title="File / Raise Dispute"
+              title="Open Dispute"
               onPress={handleDispute}
               loading={loading}
               type="outlined"
@@ -260,7 +327,7 @@ export default function EscrowDetail() {
           <View style={styles.releasedInfoBox}>
             <Ionicons name="checkmark-circle" size={22} color={COLORS.secondary} />
             <Text style={styles.releasedInfoText}>
-              This protection escrow has closed. Funds are disbursed to the seller's active mobile wallet.
+              This protection escrow has closed. Funds are disbursed to the seller mobile wallet.
             </Text>
           </View>
         )}
@@ -461,6 +528,21 @@ const styles = StyleSheet.create({
   disputeInfoText: {
     flex: 1,
     color: COLORS.error,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
+  pendingInfoBox: {
+    flexDirection: "row",
+    backgroundColor: COLORS.tertiary + "12",
+    padding: 14,
+    borderRadius: ROUNDED.md,
+    gap: 10,
+    alignItems: "flex-start",
+  },
+  pendingInfoText: {
+    flex: 1,
+    color: COLORS.tertiary,
     fontSize: 12,
     fontWeight: "600",
     lineHeight: 18,

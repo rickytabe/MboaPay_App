@@ -233,7 +233,7 @@ export default function Send() {
                               onChangeText={setPhone}
                               maxLength={9}
                           />
-                      <View style={styles.checkCircle}>
+                        <View style={styles.checkCircle}>
                           {detectedOperator ? (
                               detectedOperator === "MTN" ? (
                                   <Image

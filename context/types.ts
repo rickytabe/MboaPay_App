@@ -60,6 +60,8 @@ export interface Circle {
 
 export interface Escrow {
   id: string;
+  senderId: string;
+  recipientId: string;
   title: string;
   description: string;
   role: "buyer" | "seller";
@@ -67,6 +69,10 @@ export interface Escrow {
   otherParty: string;
   otherPartyPhone: string;
   status: string;
+  senderConfirm: "pending" | "confirmed";
+  recipientConfirm: "pending" | "confirmed";
+  pawapayDepositId?: string | null;
+  pawapayPayoutId?: string | null;
   date: string;
   code: string;
   created_at?: string;
@@ -113,6 +119,7 @@ export interface AppContextType {
   payCircleContribution: (circleId: string) => Promise<void>;
   createEscrowContract: (title: string, desc: string, amount: number, otherParty: string, role: "buyer" | "seller") => Promise<void>;
   lockEscrowFunds: (escrowId: string) => Promise<void>;
+  requestEscrowRelease: (escrowId: string) => Promise<void>;
   releaseEscrowContract: (escrowId: string) => Promise<void>;
   disputeEscrowContract: (escrowId: string) => Promise<void>;
   markNotificationsAsRead: () => Promise<void>;

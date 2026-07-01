@@ -894,9 +894,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: contractId,
         sender_id: user.id,
         recipient_id: counterpartyUser.id,
+        pawapay_deposit_id: contractId,
         amount,
         description: `${title} - ${desc}`,
-        status: 'locked'
+        status: 'locked',
+        sender_confirm: 'pending',
+        recipient_confirm: 'pending'
       });
       if (insertError) throw new Error(insertError.message);
       await refreshData();
@@ -907,7 +910,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         recipient_id: user.id,          // The seller
         amount,
         description: `${title} - ${desc}`,
-        status: 'pending_payment'
+        status: 'locked',
+        sender_confirm: 'pending',
+        recipient_confirm: 'pending'
       });
       if (insertError) throw new Error(insertError.message);
       await refreshData();
@@ -917,30 +922,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const lockEscrowFunds = async (escrowId: string) => {
     const escrow = escrows.find(e => e.id === escrowId);
     if (!escrow) throw new Error("Escrow contract not found");
+    if (escrow.role !== "buyer") throw new Error("Only the buyer can lock escrow funds.");
+    if (escrow.pawapayDepositId) throw new Error("Funds are already locked for this escrow.");
     if (escrow.amount > walletBalance) throw new Error("Insufficient wallet balance. Please top up first.");
 
     await executeWalletTransfer(user.id, escrow.amount, 'escrow_deposit', escrowId, { escrow: escrowId });
 
     const { error: updateError } = await supabase
       .from('escrows')
-      .update({ status: 'locked' })
-      .eq('id', escrowId);
+      .update({ status: 'locked', pawapay_deposit_id: escrowId })
+      .eq('id', escrowId)
+      .eq('sender_id', user.id);
 
     if (updateError) throw new Error(updateError.message);
+    await refreshData();
+  };
+
+  const requestEscrowRelease = async (escrowId: string) => {
+    const escrow = escrows.find(e => e.id === escrowId);
+    if (!escrow) throw new Error("Escrow contract not found");
+    if (escrow.role !== "seller") throw new Error("Only the seller can request fund release.");
+    if (escrow.status !== "locked") throw new Error("Funds must be locked before requesting release.");
+    if (!escrow.pawapayDepositId) throw new Error("The buyer has not locked funds yet.");
+
+    const { error: updateError } = await supabase
+      .from('escrows')
+      .update({ recipient_confirm: 'confirmed' })
+      .eq('id', escrowId)
+      .eq('recipient_id', user.id)
+      .eq('status', 'locked');
+
+    if (updateError) throw new Error(updateError.message);
+
+    await createNotificationRecord(
+      'escrow_release_requested',
+      'Seller Requested Release',
+      `Please review escrow ${escrow.code}. Approve release only after delivery is verified.`,
+      escrow.senderId
+    );
+
     await refreshData();
   };
 
   const releaseEscrowContract = async (escrowId: string) => {
     const { data: escrowData, error: fetchError } = await supabase.from('escrows').select('*').eq('id', escrowId).single();
     if (fetchError || !escrowData) throw new Error("Escrow not found");
+    if (escrowData.sender_id !== user.id) throw new Error("Only the buyer can approve release.");
+    if (escrowData.status !== 'locked') throw new Error("This escrow cannot be released.");
+    if (!escrowData.pawapay_deposit_id) throw new Error("Funds have not been locked yet.");
+    if (escrowData.recipient_confirm !== 'confirmed') throw new Error("The seller must request release first.");
 
     const releaseId = generateId();
     await executeWalletTransfer(escrowData.recipient_id, escrowData.amount, 'escrow_release', releaseId, { escrow: escrowId });
 
     const { error: updateError } = await supabase
       .from('escrows')
-      .update({ status: 'released' })
-      .eq('id', escrowId);
+      .update({ status: 'released', sender_confirm: 'confirmed', pawapay_payout_id: releaseId })
+      .eq('id', escrowId)
+      .eq('sender_id', user.id)
+      .eq('status', 'locked');
 
     if (updateError) throw new Error(updateError.message);
     await refreshData();
@@ -949,16 +989,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const disputeEscrowContract = async (escrowId: string) => {
     const { data: escrowData, error: fetchError } = await supabase.from('escrows').select('*').eq('id', escrowId).single();
     if (fetchError || !escrowData) throw new Error("Escrow not found");
-
-    const refundId = generateId();
-    await executeWalletTransfer(escrowData.sender_id, escrowData.amount, 'refund', refundId, { escrow: escrowId });
+    if (escrowData.status !== 'locked') throw new Error("This escrow cannot be disputed.");
+    if (!escrowData.pawapay_deposit_id) throw new Error("Funds have not been locked yet.");
 
     const { error: updateError } = await supabase
       .from('escrows')
-      .update({ status: 'refunded' })
-      .eq('id', escrowId);
+      .update({ status: 'disputed' })
+      .eq('id', escrowId)
+      .eq('status', 'locked');
 
     if (updateError) throw new Error(updateError.message);
+
+    await Promise.all([
+      createNotificationRecord(
+        'escrow_disputed',
+        'Escrow Disputed',
+        `Escrow ${escrowId.substring(0, 8).toUpperCase()} is under dispute. Funds remain locked until review.`,
+        escrowData.sender_id
+      ),
+      createNotificationRecord(
+        'escrow_disputed',
+        'Escrow Disputed',
+        `Escrow ${escrowId.substring(0, 8).toUpperCase()} is under dispute. Funds remain locked until review.`,
+        escrowData.recipient_id
+      ),
+    ]);
+
     await refreshData();
   };
 
@@ -1070,6 +1126,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payCircleContribution,
         createEscrowContract,
         lockEscrowFunds,
+        requestEscrowRelease,
         releaseEscrowContract,
         disputeEscrowContract,
         markNotificationsAsRead,

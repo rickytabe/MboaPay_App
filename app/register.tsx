@@ -5,6 +5,7 @@ import {
   Animated,
   Image,
   Keyboard,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -205,6 +206,8 @@ export default function Register() {
   });
 
   const isValid = fullName.trim().length > 0 && phone.length === 9 && email.length > 3 && password.length >= 6;
+  const bottomKeyboardOffset = Platform.OS === "ios" ? keyboardHeight : 0;
+  const scrollKeyboardPadding = keyboardHeight;
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeIn }]}>
@@ -220,7 +223,7 @@ export default function Register() {
           style={styles.contentScroller}
           contentContainerStyle={[
             styles.content,
-            { paddingBottom: bottomActionsHeight + keyboardHeight + 36 },
+            { paddingBottom: bottomActionsHeight + scrollKeyboardPadding + 36 },
           ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -380,7 +383,7 @@ export default function Register() {
 
         <View
           onLayout={(event) => setBottomActionsHeight(event.nativeEvent.layout.height)}
-          style={[styles.bottomSection, { bottom: keyboardHeight > 0 ? keyboardHeight + 14 : 36 }]}
+          style={[styles.bottomSection, { bottom: bottomKeyboardOffset > 0 ? bottomKeyboardOffset + 14 : 36 }]}
         >
           <Button
             title={isSubmitting ? "Creating Account..." : "Create Account"}
@@ -395,6 +398,11 @@ export default function Register() {
             <TouchableOpacity onPress={handleSignIn} activeOpacity={0.7} disabled={isSubmitting}>
               <Text style={styles.signinLink}>Sign in</Text>
             </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 12 }}>
+            <Text style={{ fontSize: 12, color: colors.onSurfaceVariant }}>Powered by pawaPay</Text>
+            <Image source={require('../assets/Pawapay_logo.png')} style={{ height: 18, width: 75, resizeMode: 'contain', marginLeft: -12 }} />
           </View>
         </View>
     </Animated.View>
