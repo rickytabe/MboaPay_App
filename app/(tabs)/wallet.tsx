@@ -13,7 +13,7 @@ import { getTransactionStyle, getTransactionSubtitle } from "../../constants/Tra
 
 export default function Wallet() {
   const router = useRouter();
-  const { walletBalance, transactions, selectedOperator, setOperator, colors, theme, devFundWallet } = useApp();
+  const { walletBalance, transactions, selectedOperator, setOperator, colors, theme } = useApp();
   const styles = getStyles(colors);
   const [activeTab, setActiveTab] = useState<"all" | "deposit" | "send">("all");
   const [showUSD, setShowUSD] = useState(false);
@@ -147,24 +147,23 @@ export default function Wallet() {
               <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{showUSD ? 'XAF' : 'USD'}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.balanceText}>
+          <Text style={styles.balanceText} adjustsFontSizeToFit numberOfLines={1}>
             {showUSD 
               ? `$${(walletBalance / exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
               : `${walletBalance.toLocaleString()} XAF`}
           </Text>
-          <TouchableOpacity onPress={() => devFundWallet(1000000000)} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
-            <Text style={{ fontSize: 13, color: colors.secondary, fontWeight: '700' }}>+ Fund 1B XAF (Dev)</Text>
-          </TouchableOpacity>
         </View>
-        <Image
-          source={
-            selectedOperator === "MTN"
-              ? require("../../assets/mtn_momo.png")
-              : require("../../assets/orange_momo.png")
-          }
-          style={styles.operatorLogoLarge}
-          resizeMode="contain"
-        />
+        <View style={styles.logoContainer}>
+          <Image
+            source={
+              selectedOperator === "MTN"
+                ? require("../../assets/mtn_momo.png")
+                : require("../../assets/orange_momo.png")
+            }
+            style={styles.operatorLogoLarge}
+            resizeMode="contain"
+          />
+        </View>
       </Card>
 
       {/* Wallet Actions */}
@@ -326,12 +325,13 @@ const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
     width: 34,
     height: 34,
   },
+  logoContainer: {
+    alignItems: "flex-end",
+    marginTop: 8,
+  },
   operatorLogoLarge: {
-    position: "absolute",
-    bottom: 8,
-    right: 8,
-    width: 72,
-    height: 72,
+    width: 60,
+    height: 60,
   },
   actionButtonsRow: {
     flexDirection: "row",

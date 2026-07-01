@@ -466,6 +466,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const depositId = generateId();
     const provider = operator === 'MTN' ? PROVIDER_CODES.MTN : PROVIDER_CODES.ORANGE;
 
+    // Sandbox Bypass for large amounts (Hackathon use-case)
+    if (amount >= 1000000) {
+      console.log("Sandbox Bypass: Auto-completing large deposit");
+      await executeWalletTransfer(user.id, amount, 'top_up', depositId, { status: "COMPLETED", note: "Sandbox Bypass" }, operator);
+      await Promise.all([
+        createNotificationRecord('deposit', 'Wallet Top-up Successful', `Your wallet has been topped up by ${amount.toLocaleString()} XAF.`),
+        presentLocalNotification('Top-up Successful', `Added ${amount.toLocaleString()} XAF to your wallet.`),
+      ]);
+      return depositId;
+    }
+
     const { error: txError } = await supabase.from('transactions').insert({
       id: depositId, user_id: user.id, amount, type: 'top_up', status: 'pending', mno_provider: operator
     });
@@ -486,13 +497,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await supabase.from('transactions').update({ status: 'failed', metadata: finalStatus }).eq('id', depositId);
       throw new Error(`Deposit failed: ${finalStatus.failureReason?.failureMessage || 'Unknown error'}`);
     }
-  };
 
-  const devFundWallet = async (amount: number): Promise<void> => {
-    const txId = generateId();
-    await executeWalletTransfer(user.id, amount, 'top_up', txId, { note: "Dev Funding" });
-    await presentLocalNotification('Wallet Funded', `Added ${amount.toLocaleString()} XAF to your wallet for testing.`);
-  };
 
   const withdrawFunds = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
     try {
@@ -1098,7 +1103,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateAvatar,
         setOperator,
         topUpWallet,
-        devFundWallet,
         withdrawFunds,
         sendMoney,
         createCircle,

@@ -24,7 +24,7 @@ export default function Topup() {
     }
     
     // Prevent typing large amounts
-    if (amount.replace(".", "").length >= 7) return;
+    if (amount.replace(".", "").length >= 11) return;
 
     if (amount === "0" && val !== ".") {
       setAmount(val);

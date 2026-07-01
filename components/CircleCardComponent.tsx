@@ -45,6 +45,13 @@ export default function CircleCardComponent({ circle, colors, fullWidth = false 
   const progress = targetAmount > 0 ? currentSaved / targetAmount : 0;
   const progressPercent = currentSaved === 0 ? 0 : Math.min(Math.max(progress * 100, 8), 100);
 
+  const formatCompactAmount = (amount: number) => {
+    if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+    if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+    if (amount >= 1_000) return `${(amount / 1_000).toFixed(0)}k`;
+    return amount.toString();
+  };
+
   return (
     <TouchableOpacity
       activeOpacity={0.9}
@@ -73,7 +80,7 @@ export default function CircleCardComponent({ circle, colors, fullWidth = false 
                 {currentSaved.toLocaleString()} XAF
               </Text>
               <Text style={styles.circleCardGoalBalance}>
-                Goal: {targetAmount >= 1000 ? `${(targetAmount / 1000).toFixed(0)}k` : targetAmount}
+                Goal: {formatCompactAmount(targetAmount)}
               </Text>
             </View>
 
