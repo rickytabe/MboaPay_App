@@ -84,7 +84,7 @@ export default function Home() {
         {/* Card Header with Active Pill and Wallet Icon */}
         <View style={styles.cardHeader}>
           <View style={styles.activeBadgeContainer}>
-            <Ionicons name="refresh" size={12} color={colors.tertiaryContainer} />
+            <Ionicons name="refresh" size={12} color="#a5d6a7" />
             <Text style={styles.activeBadgeText}>Active</Text>
           </View>
           <Ionicons name="wallet-outline" size={20} color="#ffffff" style={{ opacity: 0.8 }} />
@@ -271,14 +271,14 @@ const getStyles = (colors: typeof LIGHT_COLORS) => StyleSheet.create({
   activeBadgeContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "rgba(255, 204, 0, 0.18)", // Semi-transparent Gold
+    backgroundColor: "rgba(165, 214, 167, 0.2)", // Semi-transparent light green
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: ROUNDED.full,
     gap: 4,
   },
   activeBadgeText: {
-    color: colors.tertiaryContainer,
+    color: "#a5d6a7", // Light green
     fontSize: 11,
     fontWeight: "700",
   },
