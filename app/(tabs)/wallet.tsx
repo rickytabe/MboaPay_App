@@ -13,9 +13,11 @@ import { getTransactionStyle, getTransactionSubtitle } from "../../constants/Tra
 
 export default function Wallet() {
   const router = useRouter();
-  const { walletBalance, transactions, selectedOperator, setOperator, colors, theme } = useApp();
+  const { walletBalance, transactions, selectedOperator, setOperator, colors, theme, devFundWallet } = useApp();
   const styles = getStyles(colors);
   const [activeTab, setActiveTab] = useState<"all" | "deposit" | "send">("all");
+  const [showUSD, setShowUSD] = useState(false);
+  const exchangeRate = 600;
 
   const isInflowType = (type: string) => ["top_up", "refund", "escrow_release", "transfer_in"].includes(type);
   const isOutflowType = (type: string) => ["disbursement", "contribution", "escrow_deposit", "escrow_lock", "transfer_out"].includes(type);
@@ -138,8 +140,21 @@ export default function Wallet() {
         </View>
         
         <View style={styles.balanceContainer}>
-          <Text style={styles.balanceLabel}>Available Balance</Text>
-          <Text style={styles.balanceText}>{walletBalance.toLocaleString()} XAF</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
+            <Text style={styles.balanceLabel}>Available Balance</Text>
+            <TouchableOpacity onPress={() => setShowUSD(!showUSD)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceContainer, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16, gap: 4 }}>
+              <Ionicons name="swap-vertical" size={14} color={colors.primary} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>{showUSD ? 'XAF' : 'USD'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.balanceText}>
+            {showUSD 
+              ? `$${(walletBalance / exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+              : `${walletBalance.toLocaleString()} XAF`}
+          </Text>
+          <TouchableOpacity onPress={() => devFundWallet(1000000000)} style={{ marginTop: 6, alignSelf: 'flex-start' }}>
+            <Text style={{ fontSize: 13, color: colors.secondary, fontWeight: '700' }}>+ Fund 1B XAF (Dev)</Text>
+          </TouchableOpacity>
         </View>
         <Image
           source={

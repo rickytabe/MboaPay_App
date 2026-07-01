@@ -488,6 +488,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const devFundWallet = async (amount: number): Promise<void> => {
+    const txId = generateId();
+    await executeWalletTransfer(user.id, amount, 'top_up', txId, { note: "Dev Funding" });
+    await presentLocalNotification('Wallet Funded', `Added ${amount.toLocaleString()} XAF to your wallet for testing.`);
+  };
+
   const withdrawFunds = async (amount: number, operator: 'MTN' | 'Orange'): Promise<string> => {
     try {
       if (amount > walletBalance) throw new Error("Insufficient wallet balance for withdrawal.");
@@ -1092,6 +1098,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateAvatar,
         setOperator,
         topUpWallet,
+        devFundWallet,
         withdrawFunds,
         sendMoney,
         createCircle,

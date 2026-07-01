@@ -111,6 +111,7 @@ export interface AppContextType {
   updateAvatar: (avatarUrl: string) => Promise<void>;
   setOperator: (op: "MTN" | "Orange") => void;
   topUpWallet: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
+  devFundWallet: (amount: number) => Promise<void>;
   withdrawFunds: (amount: number, operator: "MTN" | "Orange") => Promise<string>;
   sendMoney: (amount: number, phone: string, operator: "MTN" | "Orange", note: string) => Promise<string>;
   createCircle: (name: string, type: "solo" | "pool" | "rotation", goal: number, contribution: number, frequency: "daily" | "weekly" | "monthly", maxMembers: number, visibility: 'public' | 'private') => Promise<{ id: string; name: string; code: string }>;
