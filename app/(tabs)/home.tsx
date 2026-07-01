@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React from "react";
+import React, { useState } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Card from "../../components/Card";
@@ -16,6 +16,8 @@ export default function Home() {
   const router = useRouter();
   const { user, walletBalance, transactions, circles, colors, theme } = useApp();
   const styles = getStyles(colors);
+  const [showUSD, setShowUSD] = useState(false);
+  const exchangeRate = 600;
 
   const renderCircleCard = (circle: Circle) => {
     return <CircleCardComponent key={circle.id} circle={circle} colors={colors} />;
@@ -90,8 +92,18 @@ export default function Home() {
 
         {/* Card Balance Information */}
         <View style={styles.balanceInfoContainer}>
-          <Text style={styles.balanceLabel}>Total Balance</Text>
-          <Text style={styles.balanceText}>{walletBalance.toLocaleString()} XAF</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Text style={styles.balanceLabel}>Total Balance</Text>
+            <TouchableOpacity onPress={() => setShowUSD(!showUSD)} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: "rgba(255,255,255,0.15)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 16, gap: 4 }}>
+              <Ionicons name="swap-vertical" size={14} color="#ffffff" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: "#ffffff" }}>{showUSD ? 'XAF' : 'USD'}</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.balanceText} adjustsFontSizeToFit numberOfLines={1}>
+            {showUSD 
+              ? `$${(walletBalance / exchangeRate).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` 
+              : `${walletBalance.toLocaleString()} XAF`}
+          </Text>
         </View>
 
         {/* Card Buttons: Top-up, Send & Withdraw */}
